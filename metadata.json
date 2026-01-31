@@ -1,0 +1,7 @@
+{
+  "name": "Radar Hub - sua melhor defesa",
+  "description": "Plataforma que conecta condutores com processos de cassação ou suspensão a advogados especialistas, garantindo sua melhor defesa.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
