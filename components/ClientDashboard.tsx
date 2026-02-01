@@ -27,11 +27,11 @@ const ClientDashboard: React.FC<{ onLogout: () => void, user: User }> = ({ onLog
   }, [user.id]);
 
   const getStatusLabel = (status: ProcessStatus) => {
-    const labels: Record<ProcessStatus, string> = {
+    const labels: Record<string, string> = {
       [ProcessStatus.AWAITING_LAWYERS]: 'Aguardando Advogados',
-      [ProcessStatus.AWAITING_SELECTION]: 'Aguardando Sua Escolha',
+      [ProcessStatus.AWAITING_SELECTION]: 'Escolha seu Advogado',
       [ProcessStatus.AWAITING_PAYMENT]: 'Aguardando Pagamento',
-      [ProcessStatus.STARTED]: 'Processo Iniciado',
+      [ProcessStatus.AWAITING_PROTOCOL]: 'Aguardando Protocolação',
       [ProcessStatus.IN_PROGRESS]: 'Processo em Andamento',
       [ProcessStatus.FINISHED]: 'Processo Finalizado',
     };
@@ -98,6 +98,7 @@ const ClientDashboard: React.FC<{ onLogout: () => void, user: User }> = ({ onLog
           deadline: 'Análise imediata',
           status: ProcessStatus.AWAITING_LAWYERS,
           description: formData.description,
+          lastUpdateNote: 'Aguardando Advogados',
           created_at: new Date().toISOString()
         };
         const updated = [newProcess, ...myProcesses];
@@ -138,7 +139,6 @@ const ClientDashboard: React.FC<{ onLogout: () => void, user: User }> = ({ onLog
       </aside>
 
       <main className="flex-grow p-6 md:p-12">
-         {/* Cabeçalho de Meus Processos */}
          {activeTab === 'requests' && (
            <div className="max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
              <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
@@ -195,9 +195,12 @@ const ClientDashboard: React.FC<{ onLogout: () => void, user: User }> = ({ onLog
                             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Status Radar</span>
                             <span className="text-[11px] font-black text-[#593EFF] uppercase italic flex items-center gap-2">
                                <div className="w-2 h-2 bg-[#593EFF] rounded-full animate-pulse"></div>
-                               {getStatusLabel(process.status)}
+                               {process.lastUpdateNote || getStatusLabel(process.status)}
                             </span>
                          </div>
+                         {process.lastUpdateNote === 'Aguardando Pagamento' && (
+                            <button className="px-6 py-3 bg-[#593EFF] text-white font-black text-[9px] uppercase tracking-widest rounded-xl shadow-lg shadow-indigo-200">Pagar Honorários</button>
+                         )}
                       </div>
                    </div>
                 ))}
@@ -263,7 +266,7 @@ const ClientDashboard: React.FC<{ onLogout: () => void, user: User }> = ({ onLog
          )}
       </main>
 
-      {/* Modal - Timeline das Etapas */}
+      {/* Modal - Timeline das Etapas Atualizada */}
       {showTimelineModal && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-[#1e1b4b]/95 backdrop-blur-md animate-in fade-in duration-300">
           <div className="bg-white w-full max-w-lg rounded-[3.5rem] shadow-2xl overflow-hidden p-10 md:p-14 animate-in zoom-in-95">
@@ -275,12 +278,12 @@ const ClientDashboard: React.FC<{ onLogout: () => void, user: User }> = ({ onLog
              </header>
              <div className="space-y-6">
                 {[
-                  { t: 'Aguardando Advogados', d: 'Seu caso foi publicado no marketplace. Advogados especialistas estão analisando seu caso.' },
-                  { t: 'Aguardando Sua Escolha', d: 'Um ou mais advogados aceitaram o desafio. Escolha o profissional que melhor lhe atende.' },
-                  { t: 'Aguardando Pagamento', d: 'O pagamento é retido pelo Radar Hub e só liberado ao advogado após o protocolo comprovado.' },
-                  { t: 'Processo Iniciado', d: 'O advogado recebeu a documentação e começou a redigir sua peça técnica de defesa.' },
-                  { t: 'Processo em Andamento', d: 'A defesa foi protocolada. Estamos acompanhando os prazos e respostas dos órgãos.' },
-                  { t: 'Processo Finalizado', d: 'O trâmite foi encerrado e o resultado final da sua defesa foi disponibilizado.' },
+                  { t: 'Aguardando Advogados', d: 'Seu caso está visível para nossos especialistas analisarem a viabilidade técnica.' },
+                  { t: 'Aguardando Pagamento', d: 'Um advogado aceitou seu caso. Realize o pagamento para garantir a reserva do honorário.' },
+                  { t: 'Aguardando Protocolação', d: 'O pagamento foi confirmado. O advogado está finalizando a redação da sua defesa.' },
+                  { t: 'Protocolado', d: 'A defesa foi protocolada no órgão competente e o comprovante está disponível.' },
+                  { t: 'Processo em Andamento', d: 'Estamos monitorando os prazos e aguardando o julgamento pela JARI/CETRAN.' },
+                  { t: 'Processo Finalizado', d: 'O trâmite foi concluído. Veja o resultado final e as orientações de encerramento.' },
                 ].map((step, i) => (
                   <div key={i} className="flex gap-5">
                     <div className="flex flex-col items-center">
@@ -299,7 +302,7 @@ const ClientDashboard: React.FC<{ onLogout: () => void, user: User }> = ({ onLog
         </div>
       )}
 
-      {/* Modal - Nova Defesa (Mobile Friendly) */}
+      {/* Modal - Nova Defesa */}
       {showNewRequestModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#1e1b4b]/95 backdrop-blur-md animate-in fade-in duration-300">
           <div className="bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 flex flex-col max-h-[95vh]">

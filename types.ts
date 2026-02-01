@@ -9,7 +9,7 @@ export enum ProcessStatus {
   AWAITING_LAWYERS = 'AWAITING_LAWYERS',
   AWAITING_SELECTION = 'AWAITING_SELECTION',
   AWAITING_PAYMENT = 'AWAITING_PAYMENT',
-  STARTED = 'STARTED',
+  AWAITING_PROTOCOL = 'AWAITING_PROTOCOL',
   IN_PROGRESS = 'IN_PROGRESS',
   FINISHED = 'FINISHED'
 }
@@ -34,6 +34,9 @@ export interface ProcessRequest {
   deadline: string;
   status: ProcessStatus;
   description: string;
+  processNumber?: string;
+  organ?: string;
+  lastUpdateNote?: string;
   created_at: string;
   updated_at?: string;
 }
@@ -48,6 +51,10 @@ export interface User {
   avatar?: string;
   birthDate?: string;
   documentId?: string;
+  documentValidity?: string;
+  documentPdfUrl?: string;
   oab?: string;
+  oabValidity?: string;
+  oabPdfUrl?: string;
   specialty?: string;
 }

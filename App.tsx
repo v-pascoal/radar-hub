@@ -26,6 +26,7 @@ const App: React.FC = () => {
       if (savedUser) {
         const user = JSON.parse(savedUser);
         setCurrentUser(user);
+        // Redireciona para o dashboard correto se a sessão for restaurada na home
         if (currentView === 'home') {
           setCurrentView(user.role === UserRole.LAWYER ? 'lawyer-dashboard' : 'client-dashboard');
         }
@@ -65,6 +66,16 @@ const App: React.FC = () => {
     }
   };
 
+  const handleNavigateHome = () => {
+    if (currentUser.isLoggedIn) {
+      // Se estiver logado, vai para o dashboard
+      setCurrentView(currentUser.role === UserRole.LAWYER ? 'lawyer-dashboard' : 'client-dashboard');
+    } else {
+      // Se não estiver logado, vai para a home
+      setCurrentView('home');
+    }
+  };
+
   if (isInitializing) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#1e1b4b]">
@@ -82,7 +93,7 @@ const App: React.FC = () => {
         user={currentUser} 
         onLogout={handleLogout} 
         onLogin={(role) => handleNavToLogin(role)}
-        onNavigateHome={() => setCurrentView('home')}
+        onNavigateHome={handleNavigateHome}
       />
       
       <main className="flex-grow">

@@ -35,20 +35,17 @@ const Navbar: React.FC<NavbarProps> = ({ user, onLogout, onLogin, onNavigateHome
 
         {/* Desktop Actions */}
         <div className="hidden md:flex items-center gap-6">
-          <button onClick={() => { onNavigateHome(); setIsMenuOpen(false); }} className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#593EFF] transition-colors">Como funciona</button>
-          
-          <div className="w-px h-4 bg-slate-200 mx-2"></div>
+          {!user.isLoggedIn && (
+            <>
+              <button onClick={() => { onNavigateHome(); setIsMenuOpen(false); }} className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#593EFF] transition-colors">Como funciona</button>
+              <div className="w-px h-4 bg-slate-200 mx-2"></div>
+            </>
+          )}
 
           {user.isLoggedIn ? (
-            <div className="flex items-center gap-4">
-              <div className="text-right">
-                <div className="text-sm font-black text-[#2d2b6b] leading-tight">{user.name}</div>
-                <div className="text-[9px] text-slate-400 font-black uppercase tracking-widest">{user.role === UserRole.LAWYER ? 'Especialista' : 'Condutor'}</div>
-              </div>
-              <button onClick={onLogout} className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-all">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7" /></svg>
-              </button>
-            </div>
+            // Área do perfil removida do topo conforme solicitado anteriormente. 
+            // O controle fica apenas no Dashboard.
+            <div className="hidden"></div>
           ) : (
             <>
               <button onClick={() => onLogin(UserRole.LAWYER)} className="text-[10px] font-black uppercase tracking-widest text-[#2d2b6b] hover:text-[#593EFF] transition-colors">Sou Advogado</button>
