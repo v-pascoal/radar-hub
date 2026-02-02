@@ -1,89 +1,105 @@
 
 import { User, UserRole, ProcessRequest, ProcessStatus } from '../types';
+import { mockBackendInstance } from './mockBackend';
 
 const API_BASE_URL = 'https://api.radarhub.com.br/v1';
 
+// Função auxiliar para logar requests (Simulando interceptor do Axios)
+const logRequest = (method: string, url: string, body?: any) => {
+    console.log(`%c[API Request] ${method} ${url}`, 'color: #593EFF; font-weight: bold;');
+    if (body) console.log('Body:', body);
+};
+
 export const RadarApiService = {
-  async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    console.log(`[API REST] Chamando: ${API_BASE_URL}${endpoint}`, options);
-    await new Promise(resolve => setTimeout(resolve, 800));
-    throw new Error("Simulação de Backend");
+  // --- AUTH ENDPOINTS ---
+  // Retorna string (o código debug) para exibir no alerta, ou lança erro se falhar
+  async requestOtp(phone: string, isLoginMode: boolean = false): Promise<string> {
+    logRequest('POST', '/auth/otp/request', { phone, isLoginMode });
+    // Se der erro no mock (ex: usuário não encontrado), ele lança exceção e o componente trata.
+    const debugCode = await mockBackendInstance.requestAuthOtp(phone, isLoginMode);
+    return debugCode;
   },
 
-  async login(phone: string): Promise<User> {
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    const user = {
-      id: 'usr_' + Math.random().toString(36).substr(2, 9),
-      phone,
-      name: 'Dr. Anderson Silva',
-      role: UserRole.LAWYER,
-      isLoggedIn: true,
-      token: 'jwt_mock_' + Date.now()
-    };
-    localStorage.setItem('radar_token', user.token);
+  async verifyOtp(phone: string, code: string, role?: UserRole): Promise<User> {
+    logRequest('POST', '/auth/otp/verify', { phone, code, role });
+    const user = await mockBackendInstance.authVerify(phone, code, role);
+    if (!user) throw new Error("Falha na autenticação");
     return user;
   },
 
-  async submitDefenseRequest(data: any): Promise<{ success: boolean; messageId: string }> {
-    console.log(`[RABBITMQ] Publicando mensagem na fila: queue_defense_requests`, data);
-    await new Promise(resolve => setTimeout(resolve, 1800));
+  // --- CLIENT ENDPOINTS ---
+  async submitDefenseRequest(data: { client_id: string, type: string, fines: any[], totalPoints: number, description?: string, clientName?: string }): Promise<{ success: boolean; messageId: string }> {
+    logRequest('POST', '/client/processes', data);
+    
+    const value = data.type === 'Cassação' ? 980 : 490;
+    const result = await mockBackendInstance.submitProcess({ ...data, value });
+    
     return {
-      success: true,
-      messageId: 'mq_' + Math.random().toString(36).substr(2, 9)
+      success: result.success,
+      messageId: result.id
     };
   },
 
-  async getOpportunities(): Promise<ProcessRequest[]> {
-    return [
-      { 
-        id: 'opt_1', 
-        readable_id: 'RAD-7721', 
-        client_id: 'c1', 
-        clientName: 'Roberto Almeida', 
-        type: 'Suspensão', 
-        // Fix: Changed 'points' to 'totalPoints' and added 'fines' to match ProcessRequest interface
-        totalPoints: 22, 
-        fines: [],
-        value: 490, 
-        deadline: '24h', 
-        // Fix: Changed non-existent 'PENDING' to 'AWAITING_LAWYERS' to represent initial state
-        status: ProcessStatus.AWAITING_LAWYERS, 
-        description: 'Multa por excesso de velocidade capturada por radar fixo.',
-        created_at: new Date().toISOString()
-      },
-      { 
-        id: 'opt_2', 
-        readable_id: 'RAD-9902', 
-        client_id: 'c2', 
-        clientName: 'Juliana Paes', 
-        type: 'Cassação', 
-        // Fix: Changed 'points' to 'totalPoints' and added 'fines' to match ProcessRequest interface
-        totalPoints: 45, 
-        fines: [],
-        value: 980, 
-        deadline: 'Amanhã', 
-        // Fix: Changed non-existent 'PENDING' to 'AWAITING_LAWYERS' for consistency
-        status: ProcessStatus.AWAITING_LAWYERS, 
-        description: 'Reincidência em dirigir sob efeito de álcool (Lei Seca).',
-        created_at: new Date().toISOString()
-      }
-    ];
+  async getClientHistory(clientId: string): Promise<ProcessRequest[]> {
+    logRequest('GET', `/client/processes?clientId=${clientId}`);
+    // Retorna todos os processos do cliente (ativos e finalizados)
+    return mockBackendInstance.getMyProcesses(clientId, UserRole.CLIENT);
   },
 
-  async getClientHistory(clientId: string): Promise<ProcessRequest[]> {
-    const saved = localStorage.getItem(`defenses_${clientId}`);
-    return saved ? JSON.parse(saved) : [];
+  async getFinishedProcessDetail(processId: string): Promise<any> {
+    logRequest('GET', `/client/processes/${processId}/history`);
+    return mockBackendInstance.getHistoryDetail(processId);
+  },
+
+  async updateProfile(userId: string, data: any): Promise<boolean> {
+    logRequest('PUT', `/users/${userId}`, data);
+    return mockBackendInstance.updateUser(userId, data);
   }
 };
 
 export const DatabaseService = {
+  // --- LAWYER ENDPOINTS ---
   async getOpenOpportunities(): Promise<ProcessRequest[]> {
-    return RadarApiService.getOpportunities();
+    logRequest('GET', '/lawyer/opportunities');
+    return mockBackendInstance.getOpportunities();
+  },
+
+  async getLawyerProcesses(lawyerId: string): Promise<ProcessRequest[]> {
+    logRequest('GET', `/lawyer/processes?lawyerId=${lawyerId}`);
+    return mockBackendInstance.getMyProcesses(lawyerId, UserRole.LAWYER);
+  },
+
+  async getWalletStats(lawyerId: string) {
+    logRequest('GET', `/lawyer/wallet/${lawyerId}`);
+    return mockBackendInstance.getWalletStats(lawyerId);
+  },
+
+  async getTips(lawyerId: string) {
+    logRequest('GET', `/lawyer/tips/${lawyerId}`);
+    return mockBackendInstance.getLawyerTips(lawyerId);
   },
 
   async acceptProcess(id: string, lawyerId: string): Promise<boolean> {
-    console.log(`[API REST] PATCH /api/processes/${id} - Lawyer: ${lawyerId}`);
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    return true;
+    logRequest('POST', `/lawyer/processes/${id}/accept`, { lawyerId });
+    return mockBackendInstance.acceptOpportunity(id, lawyerId);
+  },
+
+  async updateProcessStatus(id: string, data: { status: string, note: string, files: File[] }): Promise<boolean> {
+    // Conversão de status string para Enum
+    let newStatus = ProcessStatus.IN_PROGRESS;
+    if (data.status === 'Finalizado') newStatus = ProcessStatus.FINISHED;
+    if (data.status === 'Aguardando Pagamento') newStatus = ProcessStatus.AWAITING_PAYMENT;
+
+    logRequest('PUT', `/lawyer/processes/${id}/status`, { 
+        status: newStatus, 
+        note: data.note, 
+        filesCount: data.files.length 
+    });
+
+    return mockBackendInstance.updateProcessStatus(id, {
+        status: newStatus,
+        lastUpdateNote: data.status, // Usando o label vindo do front
+        description: data.note
+    });
   }
 };

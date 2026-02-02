@@ -57,4 +57,5 @@ export interface User {
   oabValidity?: string;
   oabPdfUrl?: string;
   specialty?: string;
+  verificationStatus?: 'PENDING' | 'UNDER_ANALYSIS' | 'VERIFIED' | 'REJECTED';
 }
