@@ -34,12 +34,12 @@ async function httpClient<T>(method: string, endpoint: string, body?: any): Prom
 
 export const RadarApiService = {
   // --- AUTH ---
-  async requestOtp(phone: string, isLoginMode: boolean = false): Promise<string> {
+  async requestOtp(phone: string, isLoginMode: boolean): Promise<string> {
     return httpClient<string>('POST', '/auth/otp/request', { phone, isLoginMode });
   },
 
-  async verifyOtp(phone: string, code: string, role?: UserRole): Promise<User> {
-    return httpClient<User>('POST', '/auth/otp/verify', { phone, code, role });
+  async verifyOtp(phone: string, code: string, role?: UserRole, userData?: Partial<User>): Promise<User> {
+    return httpClient<User>('POST', '/auth/otp/verify', { phone, code, role, userData });
   },
 
   // --- CLIENT ---

@@ -202,7 +202,8 @@ class MockServer {
             result = this.authRequestOtp(body.phone, body.isLoginMode);
         }
         else if (method === 'POST' && endpoint === '/auth/otp/verify') {
-            result = this.authVerifyOtp(body.phone, body.code, body.role);
+            // Agora recebe userData também
+            result = this.authVerifyOtp(body.phone, body.code, body.role, body.userData);
         }
 
         // --- ROTAS PROTEGIDAS ---
@@ -296,16 +297,23 @@ class MockServer {
   // --- CONTROLLERS (Business Logic) ---
 
   private authRequestOtp(phone: string, isLoginMode: boolean) {
-      if (isLoginMode) {
-          const exists = this.db.users.some(u => u.phone === phone);
-          if (!exists) throw { status: 404, message: "Usuário não encontrado." };
+      const userExists = this.db.users.some(u => u.phone === phone);
+      
+      // Regra de Ouro da Reversão: Validação Pré-OTP
+      if (isLoginMode && !userExists) {
+          throw { status: 404, message: "Usuário não encontrado. Crie uma conta." };
       }
+      
+      if (!isLoginMode && userExists) {
+           throw { status: 409, message: "Este telefone já possui cadastro. Faça login." };
+      }
+
       const code = "1234"; 
       this.db.otps.set(phone, code);
-      return code; // Retorna no body apenas para debug
+      return code; 
   }
 
-  private authVerifyOtp(phone: string, code: string, role?: UserRole) {
+  private authVerifyOtp(phone: string, code: string, role?: UserRole, userData?: Partial<User>) {
       // Backdoor para testes ou verifica mapa
       const valid = code === "1234" || this.db.otps.get(phone) === code;
       if (!valid) throw { status: 400, message: "Código inválido." };
@@ -313,14 +321,18 @@ class MockServer {
       let user = this.db.users.find(u => u.phone === phone);
       
       if (!user && role) {
-          // Register logic
+          // Lógica de Registro (Register logic)
+          // Agora usamos os dados passados (userData) para popular o objeto
           user = {
               id: `usr_${Date.now()}`,
               phone,
-              name: '',
+              name: userData?.name || '',
+              documentId: userData?.documentId || '',
+              birthDate: userData?.birthDate || '',
+              oab: userData?.oab || undefined,
               role,
               isLoggedIn: true,
-              verificationStatus: 'PENDING',
+              verificationStatus: 'PENDING', // Ainda pendente pois falta upload dos documentos
               createdAt: new Date().toISOString()
           };
           this.db.users.push(user);

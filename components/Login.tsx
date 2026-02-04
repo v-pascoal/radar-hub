@@ -109,8 +109,6 @@ const Login: React.FC<LoginProps> = ({ initialRole = UserRole.CLIENT, onLoginSuc
     setLoading(true);
 
     try {
-        // Envia o modo para a API:
-        // Se mode === 'login', o backend checará se o usuário existe.
         const isLoginMode = mode === 'login';
         const codeReceived = await RadarApiService.requestOtp(rawPhone, isLoginMode);
         
@@ -146,12 +144,21 @@ const Login: React.FC<LoginProps> = ({ initialRole = UserRole.CLIENT, onLoginSuc
         // No fluxo de registro, passamos a role escolhida para criação da conta.
         const roleToPass = mode === 'register' ? role : undefined;
         
-        const user = await RadarApiService.verifyOtp(rawPhone, formData.otp, roleToPass);
+        // Se for registro, montamos o objeto com os dados preenchidos
+        const userData = mode === 'register' ? {
+            name: formData.name,
+            documentId: formData.documentId,
+            birthDate: formData.birthDate,
+            oab: formData.oab
+        } : undefined;
+        
+        const user = await RadarApiService.verifyOtp(rawPhone, formData.otp, roleToPass, userData);
         
         // Sucesso
         onLoginSuccess({
             ...user,
-            // Mantém dados do form se for novo cadastro para garantir que o state user tenha os dados frescos
+            // Mantém dados do form em memória caso o backend retorne algo diferente (backup), 
+            // mas agora o backend deve retornar preenchido.
             name: user.name || formData.name, 
             documentId: user.documentId || formData.documentId,
             birthDate: user.birthDate || formData.birthDate,
