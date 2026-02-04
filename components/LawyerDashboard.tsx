@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ProcessRequest, ProcessStatus, User, TimelineEvent } from '../types';
+import { ProcessRequest, ProcessStatus, User, TimelineEvent, WalletStats, Tip } from '../types';
 import { DatabaseService, RadarApiService } from '../services/api';
 
 const LawyerDashboard: React.FC<{ onLogout: () => void, user: User }> = ({ onLogout, user }) => {
@@ -12,8 +12,8 @@ const LawyerDashboard: React.FC<{ onLogout: () => void, user: User }> = ({ onLog
   const [profileAvatar, setProfileAvatar] = useState(user.avatar || '');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
-  const [walletStats, setWalletStats] = useState({ totalAccepted: 0, retained: 0, receivableThisMonth: 0, activeCount: 0, finishedCount: 0, totalCount: 0 });
-  const [tips, setTips] = useState<{ title: string; description: string; type: 'urgent' | 'info' | 'success' }[]>([]);
+  const [walletStats, setWalletStats] = useState<WalletStats>({ totalAccepted: 0, retained: 0, receivableThisMonth: 0, activeCount: 0, finishedCount: 0, totalCount: 0 });
+  const [tips, setTips] = useState<Tip[]>([]);
 
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
   const [selectedProcessForUpdate, setSelectedProcessForUpdate] = useState<ProcessRequest | null>(null);

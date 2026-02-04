@@ -1,19 +1,19 @@
 
-import { ProcessRequest, ProcessStatus, User, UserRole, FineDetail, TimelineEvent } from '../types';
+import { ProcessRequest, ProcessStatus, User, UserRole, TimelineEvent, ApiResponse } from '../types';
 
-// Interfaces de Banco de Dados Simulado
+// --- DATABASE SIMULATION ---
 interface DB {
   users: User[];
   processes: ProcessRequest[];
-  historyDetails: Record<string, any>; // Detalhes estendidos para o histórico
-  processTimelines: Record<string, TimelineEvent[]>; // Nova tabela de timelines
-  tips: { title: string; description: string; type: 'urgent' | 'info' | 'success' }[]; // Tabela de Dicas CMS
+  historyDetails: Record<string, any>;
+  processTimelines: Record<string, TimelineEvent[]>;
+  tips: { title: string; description: string; type: 'urgent' | 'info' | 'success' }[];
+  otps: Map<string, string>; // Tabela temporária de códigos
 }
 
-// Dados Iniciais do "Banco"
 const INITIAL_DB: DB = {
   users: [
-    // --- ADVOGADOS (VERIFICADOS) ---
+    // --- ADVOGADOS ---
     {
       id: 'lawyer_1',
       name: 'Dr. Carlos Mendes',
@@ -50,24 +50,7 @@ const INITIAL_DB: DB = {
       verificationStatus: 'VERIFIED',
       createdAt: '2023-03-20T14:30:00Z'
     },
-    // --- ADVOGADO (PENDENTE DE DOCS) ---
-    {
-      id: 'lawyer_pending',
-      name: 'Dr. Novo Sem Docs',
-      phone: '11977777777', // Telefone Login
-      documentId: '555.666.777-88',
-      role: UserRole.LAWYER,
-      isLoggedIn: false,
-      oab: 'MG 555.666',
-      // Sem URLs de documentos
-      avatar: '',
-      specialty: 'Multas',
-      birthDate: '20/01/1990',
-      verificationStatus: 'PENDING',
-      createdAt: new Date().toISOString()
-    },
-    
-    // --- CONDUTORES (VERIFICADOS) ---
+    // --- CLIENTES ---
     {
       id: 'client_1',
       name: 'Roberto Almeida',
@@ -80,39 +63,10 @@ const INITIAL_DB: DB = {
       avatar: 'https://i.pravatar.cc/150?u=client_1',
       birthDate: '01/02/1980',
       verificationStatus: 'VERIFIED',
-      createdAt: '2023-10-05T09:00:00Z' // Data usada no mock do "Desde..."
-    },
-    {
-      id: 'client_2',
-      name: 'Ana Souza',
-      phone: '31977776666',
-      role: UserRole.CLIENT,
-      isLoggedIn: false,
-      documentId: '111.222.333-44',
-      documentValidity: '15/05/2025',
-      documentPdfUrl: 'mock_doc_ana.pdf',
-      avatar: 'https://i.pravatar.cc/150?u=client_2',
-      birthDate: '10/10/1992',
-      verificationStatus: 'VERIFIED',
-      createdAt: '2023-11-12T16:20:00Z'
-    },
-    // --- CONDUTOR (PENDENTE DE DOCS) ---
-    {
-      id: 'client_pending',
-      name: 'Lucas Pendente',
-      phone: '11966666666', // Telefone Login
-      role: UserRole.CLIENT,
-      isLoggedIn: false,
-      documentId: '999.000.111-22',
-      // Sem URL de documento
-      avatar: '',
-      birthDate: '05/05/1995',
-      verificationStatus: 'PENDING',
-      createdAt: new Date().toISOString()
+      createdAt: '2023-10-05T09:00:00Z'
     }
   ],
   processes: [
-    // Processos do Roberto (client_1)
     {
         id: 'proc_active_1',
         readable_id: 'RAD-7721',
@@ -125,8 +79,8 @@ const INITIAL_DB: DB = {
         value: 490,
         deadline: '24h',
         status: ProcessStatus.AWAITING_PROTOCOL,
-        description: 'Multa por excesso de velocidade capturada por radar fixo em rodovia federal.',
-        created_at: new Date(Date.now() - 86400000 * 5).toISOString(), // 5 dias atrás
+        description: 'Multa por excesso de velocidade.',
+        created_at: new Date(Date.now() - 86400000 * 5).toISOString(),
         lastUpdateNote: 'Aguardando Protocolação',
         processNumber: '0012345-67.2024'
     },
@@ -141,29 +95,9 @@ const INITIAL_DB: DB = {
         value: 980,
         deadline: 'Finalizado',
         status: ProcessStatus.FINISHED,
-        description: 'Processo administrativo de cassação por suposta recusa ao teste do bafômetro.',
+        description: 'Processo administrativo de cassação.',
         lastUpdateNote: 'Deferido',
         created_at: '2023-08-10',
-    },
-    // Processos da Ana (client_2)
-    {
-        id: 'proc_ana_1',
-        readable_id: 'RAD-9012',
-        client_id: 'client_2',
-        clientName: 'Ana Souza',
-        type: 'Suspensão',
-        totalPoints: 35,
-        fines: [
-            { id: 'fa1', points: 7, documentUrl: '#', documentName: 'Farol_Vermelho.pdf' },
-            { id: 'fa2', points: 5, documentUrl: '#', documentName: 'Estacionamento.pdf' }
-        ],
-        value: 490,
-        deadline: '10/10/2024',
-        status: ProcessStatus.IN_PROGRESS,
-        description: 'Acúmulo de pontos em infrações urbanas. Cliente alega que a sinalização estava encoberta.',
-        lastUpdateNote: 'Em elaboração',
-        lawyer_id: 'lawyer_2', // Dra. Fernanda já pegou esse
-        created_at: '2023-11-15'
     }
   ],
   processTimelines: {
@@ -171,93 +105,19 @@ const INITIAL_DB: DB = {
           {
               id: 'evt_1',
               processId: 'proc_active_1',
-              date: new Date(Date.now() - 3600000 * 2).toISOString(), // 2 horas atrás
+              date: new Date(Date.now() - 3600000 * 2).toISOString(),
               title: 'Solicitação de Documento',
-              description: 'Roberto, preciso de uma cópia legível do seu comprovante de residência atualizado para finalizar a peça.',
+              description: 'Roberto, preciso de uma cópia legível do seu comprovante.',
               authorRole: 'LAWYER',
               authorName: 'Dr. Carlos Mendes',
-              type: 'MESSAGE'
-          },
-          {
-              id: 'evt_2',
-              processId: 'proc_active_1',
-              date: new Date(Date.now() - 86400000 * 1).toISOString(), // 1 dia atrás
-              title: 'Atualização de Status',
-              description: 'Fase de elaboração da defesa prévia iniciada.',
-              authorRole: 'LAWYER',
-              authorName: 'Dr. Carlos Mendes',
-              type: 'STATUS_CHANGE'
-          },
-          {
-              id: 'evt_3',
-              processId: 'proc_active_1',
-              date: new Date(Date.now() - 86400000 * 2).toISOString(), // 2 dias atrás
-              title: 'Pagamento Confirmado',
-              description: 'Os honorários foram retidos na plataforma. Advogado autorizado a iniciar.',
-              authorRole: 'SYSTEM',
-              authorName: 'Radar Hub',
-              type: 'STATUS_CHANGE'
-          },
-          {
-              id: 'evt_4',
-              processId: 'proc_active_1',
-              date: new Date(Date.now() - 86400000 * 3).toISOString(), // 3 dias atrás
-              title: 'Dúvida sobre prazo',
-              description: 'Doutor, qual a previsão para darmos entrada? Meu prazo vence semana que vem.',
-              authorRole: 'CLIENT',
-              authorName: 'Roberto Almeida',
-              type: 'MESSAGE'
-          },
-          {
-              id: 'evt_5',
-              processId: 'proc_active_1',
-              date: new Date(Date.now() - 86400000 * 4).toISOString(), // 4 dias atrás
-              title: 'Causa Aceita',
-              description: 'O advogado aceitou sua solicitação. Aguardando pagamento.',
-              authorRole: 'LAWYER',
-              authorName: 'Dr. Carlos Mendes',
-              type: 'STATUS_CHANGE'
-          },
-          {
-              id: 'evt_6',
-              processId: 'proc_active_1',
-              date: new Date(Date.now() - 86400000 * 5).toISOString(), // 5 dias atrás
-              title: 'Solicitação Criada',
-              description: 'Solicitação de defesa enviada para análise dos advogados.',
-              authorRole: 'CLIENT',
-              authorName: 'Roberto Almeida',
-              type: 'STATUS_CHANGE'
-          }
-      ],
-      'proc_ana_1': [
-          {
-              id: 'evt_ana_1',
-              processId: 'proc_ana_1',
-              date: new Date().toISOString(),
-              title: 'Análise Iniciada',
-              description: 'Estou analisando as multas anexadas.',
-              authorRole: 'LAWYER',
-              authorName: 'Dra. Fernanda Lima',
               type: 'MESSAGE'
           }
       ]
   },
   tips: [
-      {
-          title: "Agilidade na Avaliação",
-          description: "Aceite e avalie os casos disponíveis rapidamente. Os primeiros a aceitar têm 80% mais chance de fechar o contrato.",
-          type: 'urgent'
-      },
-      {
-          title: "Protocolo Expresso",
-          description: "Protocole o pedido do cliente nas primeiras 48 horas. Isso libera a primeira parcela dos seus honorários imediatamente.",
-          type: 'info'
-      },
-      {
-          title: "Comunicação Proativa",
-          description: "Atualize o status a cada movimentação. Clientes informados avaliam melhor o serviço final.",
-          type: 'success'
-      }
+      { title: "Agilidade na Avaliação", description: "Aceite e avalie os casos disponíveis rapidamente.", type: 'urgent' },
+      { title: "Protocolo Expresso", description: "Protocole o pedido do cliente nas primeiras 48 horas.", type: 'info' },
+      { title: "Comunicação Proativa", description: "Atualize o status a cada movimentação.", type: 'success' }
   ],
   historyDetails: {
     'proc_hist_1': {
@@ -265,373 +125,361 @@ const INITIAL_DB: DB = {
         lawyerName: 'Dr. Carlos Mendes',
         finishedDate: '15/12/2023',
         timeline: [
-            {
-              date: '15/12/2023',
-              type: 'success',
-              title: 'Sentença Final - Deferido',
-              description: 'O recurso foi julgado procedente pelo CETRAN. A penalidade de cassação foi cancelada.',
-              docName: 'Decisao_CETRAN_Final.pdf',
-              docUrl: '#'
-            },
-            {
-              date: '20/11/2023',
-              type: 'note',
-              title: 'Parecer do Advogado',
-              description: 'A sustentação oral foi realizada com sucesso. O relator acolheu a tese de nulidade.'
-            },
-            {
-              date: '05/10/2023',
-              type: 'document',
-              title: 'Recurso 2ª Instância (CETRAN)',
-              description: 'Protocolo do recurso administrativo endereçado ao Conselho Estadual.',
-              docName: 'Protocolo_Recurso_2Instancia.pdf',
-              docUrl: '#'
-            },
-            {
-              date: '10/08/2023',
-              type: 'status',
-              title: 'Processo Iniciado',
-              description: 'Advogado Dr. Carlos Mendes aceitou o caso.'
-            }
+            { date: '15/12/2023', type: 'success', title: 'Sentença Final - Deferido', description: 'O recurso foi julgado procedente.', docName: 'Decisao.pdf', docUrl: '#' }
         ]
     }
-  }
+  },
+  otps: new Map()
 };
 
-export class MockBackend {
+// --- SERVER LOGIC ---
+
+class MockServer {
   private db: DB;
-  private otpStore: Map<string, string>; // Armazena OTPs temporários: Phone -> Code
 
   constructor() {
-    // Carrega do localStorage para persistência entre reloads ou usa inicial
-    const saved = localStorage.getItem('mock_db_v6'); // Versionamento para limpar dados antigos se necessário
+    const saved = localStorage.getItem('mock_db_v7');
     this.db = saved ? JSON.parse(saved) : INITIAL_DB;
-    this.otpStore = new Map();
+    // OTPs não persistem
+    this.db.otps = new Map();
   }
 
   private save() {
-    localStorage.setItem('mock_db_v6', JSON.stringify(this.db));
+    // Persiste apenas dados, não OTPs
+    const toSave = { ...this.db, otps: undefined };
+    localStorage.setItem('mock_db_v7', JSON.stringify(toSave));
   }
 
-  // --- RabbitMQ Simulators ---
-
-  private publishToExchange(exchange: string, routingKey: string, payload: any) {
-    console.group(`🐰 [RabbitMQ Publisher] Exchange: ${exchange}`);
-    console.log(`Routing Key: ${routingKey}`);
-    console.log('Payload:', JSON.stringify(payload, null, 2));
-    console.groupEnd();
-  }
-
-  // --- Endpoints Methods ---
-
-  async requestAuthOtp(phone: string, isLoginMode: boolean = false): Promise<string> {
-      await new Promise(r => setTimeout(r, 600)); // Latência
-
-      // VERIFICAÇÃO DE SEGURANÇA:
-      // Se for modo LOGIN, o usuário TEM que existir.
-      if (isLoginMode) {
-          const userExists = this.db.users.some(u => u.phone === phone);
-          if (!userExists) {
-              throw new Error("Número não encontrado. Por favor, crie uma conta em 'Primeiro Acesso'.");
-          }
-      }
-
-      // Gera código aleatório de 4 dígitos
-      // const code = Math.floor(1000 + Math.random() * 9000).toString();
-      const code = "1234"; // FIXO para facilitar o teste, ou poderia ser randômico
-      
-      this.otpStore.set(phone, code);
-
-      // Simula envio para fila de Notificações (que dispararia o SMS real)
-      this.publishToExchange(
-          'notification.sms',
-          'sms.otp.send',
-          {
-              to: phone,
-              templateId: 'tpl_login_otp',
-              params: { code: code },
-              priority: 'high'
-          }
-      );
-
-      // Retorna o código no mock APENAS para fins de desenvolvimento/demo (mostrar no alert)
-      // Em prod, isso retornaria void ou success: true
-      return code;
-  }
-
-  async authVerify(phone: string, code: string, role?: UserRole): Promise<User | null> {
-    await new Promise(r => setTimeout(r, 800));
-
-    // Validação do OTP
-    const storedCode = this.otpStore.get(phone);
-    if (code !== storedCode && code !== "1234") { // Backdoor 1234 sempre funciona pra dev
-        throw new Error("Código inválido ou expirado.");
-    }
-
-    // Limpa OTP após uso
-    this.otpStore.delete(phone);
-
-    // Busca usuário pelo telefone (login unificado)
-    let user = this.db.users.find(u => u.phone === phone);
+  // Helper de "JWT"
+  private getUserIdFromToken(token: string | undefined): string | null {
+    if (!token) return null;
+    const parts = token.split(' ');
+    if (parts.length !== 2) return null;
     
-    if (role) {
-        // FLUXO DE REGISTRO (Role fornecida explicitamente)
-        if (!user) {
-            // Auto-register -> INICIA COMO PENDENTE
-            user = {
-                id: `usr_${Date.now()}`,
-                phone,
-                name: '', // Nome será preenchido no onboarding se for novo
-                role: role,
-                isLoggedIn: true,
-                token: `mock_jwt_${Date.now()}`,
-                verificationStatus: 'PENDING',
-                createdAt: new Date().toISOString()
-            };
-            this.db.users.push(user);
-            this.save();
-        } else {
-            // Usuário já existe, apenas loga e atualiza token
-            // Em um app real, poderíamos bloquear registro duplicado ou mesclar roles
-            user.isLoggedIn = true;
-            user.token = `mock_jwt_${Date.now()}`;
+    // Tenta decodificar formato Base64 (Simulando JWT real)
+    try {
+        const tokenPart = parts[1];
+        // Formato esperado: header.payload.signature
+        const jwtParts = tokenPart.split('.');
+        // Aceita tokens com 2 ou 3 partes (header.payload ou header.payload.signature)
+        if (jwtParts.length >= 2) {
+            // Em JWT, o payload é a segunda parte
+            const payload = JSON.parse(atob(jwtParts[1]));
+            return payload.sub;
         }
-    } else {
-        // FLUXO DE LOGIN (Sem role especificada)
-        if (!user) {
-            // Se não achou usuário no login simples, erro (dupla checagem)
-            throw new Error("Usuário não encontrado. Crie uma conta.");
-        }
-        user.isLoggedIn = true;
-        user.token = `mock_jwt_${Date.now()}`;
+    } catch (e) {
+        console.error("Erro ao decodificar token", e);
     }
 
-    return user;
-  }
-
-  async updateUser(userId: string, data: Partial<User>): Promise<boolean> {
-      await new Promise(r => setTimeout(r, 800));
-      const idx = this.db.users.findIndex(u => u.id === userId);
-      
-      if (idx !== -1) {
-          const currentUser = this.db.users[idx];
-          // Mescla dados
-          const updatedUser = { ...currentUser, ...data };
-
-          // LÓGICA DE MUDANÇA DE STATUS (Server-Side Logic Mock)
-          // Se não estiver verificado, verifica se pode ir para "Em Análise"
-          // O backend nunca muda para VERIFIED automaticamente aqui, apenas para UNDER_ANALYSIS.
-          if (updatedUser.verificationStatus !== 'VERIFIED') {
-              let readyForAnalysis = false;
-
-              if (updatedUser.role === UserRole.CLIENT) {
-                  // Cliente: Precisa de Nome, CPF, Nascimento e PDF CNH com Validade
-                  if (updatedUser.name && updatedUser.documentId && updatedUser.birthDate && 
-                      updatedUser.documentPdfUrl && updatedUser.documentValidity) {
-                      readyForAnalysis = true;
-                  }
-              } else {
-                  // Advogado: Precisa de Nome, CPF, Nascimento, OAB, PDF CNH e PDF OAB com validades
-                  if (updatedUser.name && updatedUser.documentId && updatedUser.birthDate && updatedUser.oab &&
-                      updatedUser.documentPdfUrl && updatedUser.documentValidity &&
-                      updatedUser.oabPdfUrl && updatedUser.oabValidity) {
-                      readyForAnalysis = true;
-                  }
-              }
-
-              if (readyForAnalysis) {
-                  updatedUser.verificationStatus = 'UNDER_ANALYSIS';
-              } else {
-                  // Se removeu algum doc, volta pra pendente (opcional, mas seguro)
-                  updatedUser.verificationStatus = 'PENDING';
-              }
-          }
-
-          this.db.users[idx] = updatedUser;
-          this.save();
-          return true;
-      }
-      return false;
-  }
-
-  async getMyProcesses(userId: string, role: UserRole): Promise<ProcessRequest[]> {
-    await new Promise(r => setTimeout(r, 500));
-    
-    if (role === UserRole.CLIENT) {
-        return this.db.processes.filter(p => p.client_id === userId);
-    } else {
-        // Advogado vê processos que ele aceitou
-        return this.db.processes.filter(p => p.lawyer_id === userId);
-    }
-  }
-
-  // --- NOVO MÉTODO DE TIMELINE ---
-  async getProcessTimeline(processId: string): Promise<TimelineEvent[]> {
-      await new Promise(r => setTimeout(r, 700));
-      return this.db.processTimelines[processId] || [];
-  }
-
-  async getWalletStats(userId: string) {
-      await new Promise(r => setTimeout(r, 600));
-      
-      const processes = this.db.processes.filter(p => p.lawyer_id === userId);
-      const totalCount = processes.length;
-      const finishedCount = processes.filter(p => p.status === ProcessStatus.FINISHED).length;
-      const activeCount = totalCount - finishedCount;
-      
-      const totalAccepted = processes.reduce((sum, p) => sum + p.value, 0);
-      
-      // Regra de negócio mock: 10% retido pela plataforma, 90% repassado
-      const platformFee = totalAccepted * 0.10; 
-      const receivable = totalAccepted - platformFee;
-
-      // Para advogados novos (sem processos), retornar zeros
-      return {
-        totalAccepted,
-        retained: platformFee, 
-        receivableThisMonth: receivable, // Simplificação: todo o valor disponível
-        activeCount,
-        finishedCount,
-        totalCount
-      };
-  }
-
-  // --- MOCK DICAS PARA ADVOGADOS (BUSCA DO DB AGORA) ---
-  async getLawyerTips(userId: string): Promise<{ title: string; description: string; type: 'urgent' | 'info' | 'success' }[]> {
-      await new Promise(r => setTimeout(r, 400));
-      return this.db.tips;
-  }
-
-  async getHistoryDetail(processId: string) {
-    await new Promise(r => setTimeout(r, 600));
-    const process = this.db.processes.find(p => p.id === processId);
-    const details = this.db.historyDetails[processId];
-    
-    if (process && details) {
-        return { ...process, ...details };
-    }
     return null;
   }
 
-  async getOpportunities(): Promise<ProcessRequest[]> {
-    await new Promise(r => setTimeout(r, 500));
-    // Retorna processos sem advogado
-    return this.db.processes.filter(p => p.status === ProcessStatus.AWAITING_LAWYERS);
-  }
-
-  async submitProcess(processData: any): Promise<{ success: boolean, id: string }> {
-    await new Promise(r => setTimeout(r, 1200));
-
-    const newId = `proc_${Date.now()}`;
-    const newProcess: ProcessRequest = {
-        id: newId,
-        readable_id: `RAD-${Math.floor(1000 + Math.random() * 9000)}`,
-        client_id: processData.client_id,
-        clientName: processData.clientName || 'Novo Cliente',
-        type: processData.type,
-        totalPoints: processData.totalPoints,
-        fines: processData.fines,
-        value: processData.value,
-        deadline: 'Análise Pendente',
-        status: ProcessStatus.AWAITING_LAWYERS,
-        description: processData.description,
-        lastUpdateNote: 'Aguardando Advogados',
-        created_at: new Date().toISOString()
-    };
-
-    this.db.processes.unshift(newProcess);
-    
-    // Inicia uma timeline vazia ou com evento inicial
-    this.db.processTimelines[newId] = [{
-        id: `evt_init_${newId}`,
-        processId: newId,
-        date: new Date().toISOString(),
-        title: 'Solicitação Criada',
-        description: 'O cliente iniciou a solicitação de defesa.',
-        authorRole: 'CLIENT',
-        authorName: processData.clientName || 'Cliente',
-        type: 'STATUS_CHANGE'
-    }];
-
-    this.save();
-
-    // Simula envio para fila de ingestão de processos
-    this.publishToExchange(
-        'defense.submission', 
-        'submission.created', 
-        { 
-            messageId: `msg_${Date.now()}`,
-            timestamp: new Date().toISOString(),
-            source: 'web_client_portal',
-            data: newProcess 
-        }
-    );
-
-    return { success: true, id: newId };
-  }
-
-  async updateProcessStatus(id: string, updateData: any) {
-    await new Promise(r => setTimeout(r, 1000));
-    
-    const index = this.db.processes.findIndex(p => p.id === id);
-    if (index !== -1) {
-        this.db.processes[index] = { ...this.db.processes[index], ...updateData };
-        
-        // Adiciona evento na timeline se houver atualização de status
-        if (!this.db.processTimelines[id]) this.db.processTimelines[id] = [];
-        
-        this.db.processTimelines[id].unshift({
-            id: `evt_upd_${Date.now()}`,
-            processId: id,
-            date: new Date().toISOString(),
-            title: updateData.lastUpdateNote || 'Atualização de Status',
-            description: updateData.description || `Status alterado para ${updateData.status}`,
-            authorRole: 'LAWYER',
-            authorName: 'Advogado', // Simplificado
-            type: 'STATUS_CHANGE'
-        });
-
-        this.save();
-
-        // Simula evento de atualização de status para notificação
-        this.publishToExchange(
-            'process.events',
-            'status.updated',
-            {
-                processId: id,
-                clientId: this.db.processes[index].client_id,
-                newStatus: updateData.status,
-                note: updateData.lastUpdateNote,
-                timestamp: new Date().toISOString()
-            }
-        );
-        return true;
+  private authenticate(headers: any): User {
+    const userId = this.getUserIdFromToken(headers['Authorization']);
+    const user = this.db.users.find(u => u.id === userId);
+    if (!user) {
+        console.warn(`Auth failed. ID extracted: ${userId}`);
+        throw { status: 401, message: 'Não autorizado. Token inválido.' };
     }
-    return false;
+    return user;
   }
 
-  async acceptOpportunity(processId: string, lawyerId: string) {
-      // Adiciona evento de aceite
-      if (!this.db.processTimelines[processId]) this.db.processTimelines[processId] = [];
-      const lawyer = this.db.users.find(u => u.id === lawyerId);
+  // --- REQUEST HANDLER (Main Entry Point) ---
+  async handleRequest(method: string, endpoint: string, body?: any, headers: any = {}): Promise<ApiResponse> {
+    console.group(`🖥️ [Mock Server] ${method} ${endpoint}`);
+    console.log('Headers:', headers);
+    console.log('Body:', body);
+    
+    // Simula latência de rede
+    await new Promise(r => setTimeout(r, 400 + Math.random() * 400));
+
+    try {
+        let result: any;
+
+        // --- ROTAS ABERTAS (Public) ---
+        
+        if (method === 'POST' && endpoint === '/auth/otp/request') {
+            result = this.authRequestOtp(body.phone, body.isLoginMode);
+        }
+        else if (method === 'POST' && endpoint === '/auth/otp/verify') {
+            result = this.authVerifyOtp(body.phone, body.code, body.role);
+        }
+
+        // --- ROTAS PROTEGIDAS ---
+        else {
+            const user = this.authenticate(headers);
+            console.log(`👤 User Authenticated: ${user.name} (${user.role})`);
+
+            // Rotas de Usuário Comum
+            if (method === 'PUT' && endpoint.startsWith('/users/')) {
+                const targetId = endpoint.split('/')[2];
+                if (targetId !== user.id) throw { status: 403, message: 'Proibido alterar outro usuário.' };
+                result = this.updateUserProfile(user.id!, body);
+            }
+
+            // Rotas de Advogado
+            else if (user.role === UserRole.LAWYER) {
+                 if (method === 'GET' && endpoint === '/lawyer/opportunities') {
+                     result = this.db.processes.filter(p => p.status === ProcessStatus.AWAITING_LAWYERS);
+                 }
+                 else if (method === 'GET' && endpoint.includes('/processes') && !endpoint.includes('timeline')) {
+                     // Filtra processos deste advogado
+                     result = this.db.processes.filter(p => p.lawyer_id === user.id);
+                 }
+                 else if (method === 'GET' && endpoint.includes('/timeline')) {
+                     const procId = endpoint.split('/')[3];
+                     // Verifica se o processo pertence ao advogado
+                     const proc = this.db.processes.find(p => p.id === procId && p.lawyer_id === user.id);
+                     if (!proc) throw { status: 403, message: 'Acesso negado ao processo.' };
+                     result = this.db.processTimelines[procId] || [];
+                 }
+                 else if (method === 'POST' && endpoint.endsWith('/accept')) {
+                     const procId = endpoint.split('/')[3];
+                     result = this.lawyerAcceptProcess(user, procId);
+                 }
+                 else if (method === 'PUT' && endpoint.endsWith('/status')) {
+                     const procId = endpoint.split('/')[3];
+                     result = this.lawyerUpdateStatus(user, procId, body);
+                 }
+                 else if (method === 'GET' && endpoint.includes('/wallet')) {
+                     result = this.getWalletStats(user.id!);
+                 }
+                 else if (method === 'GET' && endpoint.includes('/tips')) {
+                     result = this.db.tips;
+                 }
+                 else {
+                     throw { status: 404, message: 'Endpoint não encontrado para Lawyer' };
+                 }
+            }
+
+            // Rotas de Cliente
+            else if (user.role === UserRole.CLIENT) {
+                if (method === 'POST' && endpoint === '/client/processes') {
+                    result = this.clientSubmitProcess(user, body);
+                }
+                else if (method === 'GET' && endpoint === '/client/processes') {
+                    result = this.db.processes.filter(p => p.client_id === user.id);
+                }
+                else if (method === 'GET' && endpoint.endsWith('/history')) {
+                     const procId = endpoint.split('/')[3];
+                     // Valida propriedade
+                     const proc = this.db.processes.find(p => p.id === procId && p.client_id === user.id);
+                     if (!proc) throw { status: 403, message: 'Acesso negado.' };
+                     
+                     const details = this.db.historyDetails[procId];
+                     result = details ? { ...proc, ...details } : null;
+                }
+                else {
+                    throw { status: 404, message: 'Endpoint não encontrado para Client' };
+                }
+            }
+            else {
+                throw { status: 403, message: 'Role não autorizada.' };
+            }
+        }
+
+        console.log('✅ Response:', result);
+        console.groupEnd();
+        return { success: true, data: result, status: 200 };
+
+    } catch (err: any) {
+        console.error('❌ Error:', err);
+        console.groupEnd();
+        return {
+            success: false,
+            error: err.message || 'Internal Server Error',
+            status: err.status || 500
+        };
+    }
+  }
+
+  // --- CONTROLLERS (Business Logic) ---
+
+  private authRequestOtp(phone: string, isLoginMode: boolean) {
+      if (isLoginMode) {
+          const exists = this.db.users.some(u => u.phone === phone);
+          if (!exists) throw { status: 404, message: "Usuário não encontrado." };
+      }
+      const code = "1234"; 
+      this.db.otps.set(phone, code);
+      return code; // Retorna no body apenas para debug
+  }
+
+  private authVerifyOtp(phone: string, code: string, role?: UserRole) {
+      // Backdoor para testes ou verifica mapa
+      const valid = code === "1234" || this.db.otps.get(phone) === code;
+      if (!valid) throw { status: 400, message: "Código inválido." };
+
+      let user = this.db.users.find(u => u.phone === phone);
       
-      this.db.processTimelines[processId].unshift({
-          id: `evt_accept_${Date.now()}`,
-          processId: processId,
-          date: new Date().toISOString(),
+      if (!user && role) {
+          // Register logic
+          user = {
+              id: `usr_${Date.now()}`,
+              phone,
+              name: '',
+              role,
+              isLoggedIn: true,
+              verificationStatus: 'PENDING',
+              createdAt: new Date().toISOString()
+          };
+          this.db.users.push(user);
+          this.save();
+      } else if (!user) {
+          throw { status: 404, message: "Conta não encontrada." };
+      }
+
+      // Gera Token Fake (Formato JWT-ish: Header.Payload.Signature)
+      const payload = { 
+          sub: user.id, 
+          role: user.role, 
+          name: user.name, 
+          iat: Date.now() 
+      };
+      
+      // header falso + payload base64 + assinatura falsa
+      const token = `mock.${btoa(JSON.stringify(payload))}.signature`;
+      
+      user.isLoggedIn = true;
+      user.token = token; 
+      
+      return user;
+  }
+
+  private updateUserProfile(userId: string, data: any) {
+      const idx = this.db.users.findIndex(u => u.id === userId);
+      if (idx === -1) throw { status: 404, message: "User not found" };
+
+      const currentUser = this.db.users[idx];
+      const updatedUser = { ...currentUser, ...data };
+
+      // Regra de Negócio: Mudança de Status
+      if (updatedUser.verificationStatus !== 'VERIFIED') {
+          const hasDocs = updatedUser.role === UserRole.CLIENT 
+              ? (updatedUser.documentId && updatedUser.documentPdfUrl)
+              : (updatedUser.documentId && updatedUser.oab && updatedUser.oabPdfUrl);
+          
+          updatedUser.verificationStatus = hasDocs ? 'UNDER_ANALYSIS' : 'PENDING';
+      }
+
+      this.db.users[idx] = updatedUser;
+      this.save();
+      return true;
+  }
+
+  private lawyerAcceptProcess(lawyer: User, processId: string) {
+      const procIdx = this.db.processes.findIndex(p => p.id === processId);
+      if (procIdx === -1) throw { status: 404, message: "Processo não encontrado" };
+
+      const process = this.db.processes[procIdx];
+      if (process.status !== ProcessStatus.AWAITING_LAWYERS) {
+          throw { status: 400, message: "Este processo não está mais disponível." };
+      }
+
+      // Atomic Update
+      process.status = ProcessStatus.AWAITING_PAYMENT;
+      process.lawyer_id = lawyer.id;
+      process.lastUpdateNote = 'Aguardando Pagamento';
+      
+      this.db.processes[procIdx] = process;
+
+      // Add Timeline Event
+      this.addTimelineEvent(processId, {
           title: 'Causa Aceita',
-          description: `O advogado ${lawyer?.name || 'Parceiro'} aceitou a solicitação.`,
+          description: `O advogado ${lawyer.name} aceitou a solicitação.`,
           authorRole: 'LAWYER',
-          authorName: lawyer?.name || 'Advogado',
+          authorName: lawyer.name,
           type: 'STATUS_CHANGE'
       });
 
-      return this.updateProcessStatus(processId, {
-          status: ProcessStatus.AWAITING_PAYMENT,
-          lastUpdateNote: 'Aguardando Pagamento',
-          lawyer_id: lawyerId
+      this.save();
+      return true;
+  }
+
+  private lawyerUpdateStatus(lawyer: User, processId: string, data: any) {
+      const procIdx = this.db.processes.findIndex(p => p.id === processId);
+      if (procIdx === -1) throw { status: 404, message: "Processo não encontrado" };
+      
+      // Validação de Permissão
+      if (this.db.processes[procIdx].lawyer_id !== lawyer.id) {
+          throw { status: 403, message: "Você não é o responsável por este processo." };
+      }
+
+      this.db.processes[procIdx].status = data.status;
+      this.db.processes[procIdx].lastUpdateNote = data.status; // Label simples
+      
+      this.addTimelineEvent(processId, {
+          title: data.status,
+          description: data.description || 'Status atualizado pelo advogado.',
+          authorRole: 'LAWYER',
+          authorName: lawyer.name,
+          type: 'STATUS_CHANGE'
+      });
+
+      this.save();
+      return true;
+  }
+
+  private clientSubmitProcess(client: User, data: any) {
+      const newId = `proc_${Date.now()}`;
+      const newProcess: ProcessRequest = {
+          id: newId,
+          readable_id: `RAD-${Math.floor(1000 + Math.random() * 9000)}`,
+          client_id: client.id!,
+          clientName: client.name || 'Cliente',
+          type: data.type,
+          totalPoints: data.totalPoints,
+          fines: data.fines,
+          value: data.value, // Backend calculando/validando valor se quisesse
+          deadline: 'Análise Pendente',
+          status: ProcessStatus.AWAITING_LAWYERS,
+          description: data.description,
+          lastUpdateNote: 'Aguardando Advogados',
+          created_at: new Date().toISOString()
+      };
+
+      this.db.processes.unshift(newProcess);
+      this.addTimelineEvent(newId, {
+          title: 'Solicitação Criada',
+          description: 'Defesa solicitada.',
+          authorRole: 'CLIENT',
+          authorName: client.name,
+          type: 'STATUS_CHANGE'
+      });
+      
+      this.save();
+      return { id: newId, success: true };
+  }
+
+  private getWalletStats(lawyerId: string) {
+      const processes = this.db.processes.filter(p => p.lawyer_id === lawyerId);
+      const total = processes.reduce((acc, curr) => acc + curr.value, 0);
+      return {
+          totalAccepted: total,
+          retained: total * 0.1,
+          receivableThisMonth: total * 0.9,
+          activeCount: processes.filter(p => p.status !== ProcessStatus.FINISHED).length,
+          finishedCount: processes.filter(p => p.status === ProcessStatus.FINISHED).length,
+          totalCount: processes.length
+      };
+  }
+
+  private addTimelineEvent(processId: string, eventData: Partial<TimelineEvent>) {
+      if (!this.db.processTimelines[processId]) {
+          this.db.processTimelines[processId] = [];
+      }
+      this.db.processTimelines[processId].unshift({
+          id: `evt_${Date.now()}`,
+          processId,
+          date: new Date().toISOString(),
+          title: eventData.title || 'Evento',
+          description: eventData.description || '',
+          authorRole: eventData.authorRole || 'SYSTEM',
+          authorName: eventData.authorName || 'Sistema',
+          type: eventData.type || 'MESSAGE',
+          ...eventData
       });
   }
 }
 
-export const mockBackendInstance = new MockBackend();
+export const mockServerInstance = new MockServer();

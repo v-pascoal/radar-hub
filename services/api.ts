@@ -1,109 +1,97 @@
 
-import { User, UserRole, ProcessRequest, ProcessStatus, TimelineEvent } from '../types';
-import { mockBackendInstance } from './mockBackend';
+import { User, UserRole, ProcessRequest, TimelineEvent, ApiResponse, WalletStats, Tip } from '../types';
+import { mockServerInstance } from './mockBackend';
 
 const API_BASE_URL = 'https://api.radarhub.com.br/v1';
 
-// Função auxiliar para logar requests (Simulando interceptor do Axios)
-const logRequest = (method: string, url: string, body?: any) => {
-    console.log(`%c[API Request] ${method} ${url}`, 'color: #593EFF; font-weight: bold;');
-    if (body) console.log('Body:', body);
-};
+// --- HTTP CLIENT ABSTRACTION ---
+// Simula o comportamento do Axios/Fetch interagindo com o servidor mock
+async function httpClient<T>(method: string, endpoint: string, body?: any): Promise<T> {
+    // Recupera Token do LocalStorage (Client Side Only)
+    let token = '';
+    const session = localStorage.getItem('radar_hub_session');
+    if (session) {
+        const user = JSON.parse(session);
+        if (user.token) token = `Bearer ${user.token}`;
+    }
+
+    const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': token
+    };
+
+    console.log(`📡 [HTTP Client] Sending ${method} ${endpoint}`);
+    
+    // Chama o "Servidor"
+    const response: ApiResponse = await mockServerInstance.handleRequest(method, endpoint, body, headers);
+
+    if (!response.success) {
+        throw new Error(response.error || 'Erro na comunicação com o servidor.');
+    }
+
+    return response.data as T;
+}
 
 export const RadarApiService = {
-  // --- AUTH ENDPOINTS ---
-  // Retorna string (o código debug) para exibir no alerta, ou lança erro se falhar
+  // --- AUTH ---
   async requestOtp(phone: string, isLoginMode: boolean = false): Promise<string> {
-    logRequest('POST', '/auth/otp/request', { phone, isLoginMode });
-    // Se der erro no mock (ex: usuário não encontrado), ele lança exceção e o componente trata.
-    const debugCode = await mockBackendInstance.requestAuthOtp(phone, isLoginMode);
-    return debugCode;
+    return httpClient<string>('POST', '/auth/otp/request', { phone, isLoginMode });
   },
 
   async verifyOtp(phone: string, code: string, role?: UserRole): Promise<User> {
-    logRequest('POST', '/auth/otp/verify', { phone, code, role });
-    const user = await mockBackendInstance.authVerify(phone, code, role);
-    if (!user) throw new Error("Falha na autenticação");
-    return user;
+    return httpClient<User>('POST', '/auth/otp/verify', { phone, code, role });
   },
 
-  // --- CLIENT ENDPOINTS ---
+  // --- CLIENT ---
   async submitDefenseRequest(data: { client_id: string, type: string, fines: any[], totalPoints: number, description?: string, clientName?: string }): Promise<{ success: boolean; messageId: string }> {
-    logRequest('POST', '/client/processes', data);
-    
+    // Calculo de valores agora é feito/validado no backend, mas enviamos a estimativa
     const value = data.type === 'Cassação' ? 980 : 490;
-    const result = await mockBackendInstance.submitProcess({ ...data, value });
-    
-    return {
-      success: result.success,
-      messageId: result.id
-    };
+    return httpClient<{ success: boolean; messageId: string }>('POST', '/client/processes', { ...data, value });
   },
 
   async getClientHistory(clientId: string): Promise<ProcessRequest[]> {
-    logRequest('GET', `/client/processes?clientId=${clientId}`);
-    // Retorna todos os processos do cliente (ativos e finalizados)
-    return mockBackendInstance.getMyProcesses(clientId, UserRole.CLIENT);
+    return httpClient<ProcessRequest[]>('GET', '/client/processes');
   },
 
   async getFinishedProcessDetail(processId: string): Promise<any> {
-    logRequest('GET', `/client/processes/${processId}/history`);
-    return mockBackendInstance.getHistoryDetail(processId);
+    return httpClient<any>('GET', `/client/processes/${processId}/history`);
   },
 
   async updateProfile(userId: string, data: any): Promise<boolean> {
-    logRequest('PUT', `/users/${userId}`, data);
-    return mockBackendInstance.updateUser(userId, data);
+    return httpClient<boolean>('PUT', `/users/${userId}`, data);
   }
 };
 
 export const DatabaseService = {
-  // --- LAWYER ENDPOINTS ---
+  // --- LAWYER ---
   async getOpenOpportunities(): Promise<ProcessRequest[]> {
-    logRequest('GET', '/lawyer/opportunities');
-    return mockBackendInstance.getOpportunities();
+    return httpClient<ProcessRequest[]>('GET', '/lawyer/opportunities');
   },
 
   async getLawyerProcesses(lawyerId: string): Promise<ProcessRequest[]> {
-    logRequest('GET', `/lawyer/processes?lawyerId=${lawyerId}`);
-    return mockBackendInstance.getMyProcesses(lawyerId, UserRole.LAWYER);
+    return httpClient<ProcessRequest[]>('GET', `/lawyer/processes?lawyerId=${lawyerId}`);
   },
 
   async getProcessTimeline(processId: string): Promise<TimelineEvent[]> {
-    logRequest('GET', `/lawyer/processes/${processId}/timeline`);
-    return mockBackendInstance.getProcessTimeline(processId);
+    return httpClient<TimelineEvent[]>('GET', `/lawyer/processes/${processId}/timeline`);
   },
 
-  async getWalletStats(lawyerId: string) {
-    logRequest('GET', `/lawyer/wallet/${lawyerId}`);
-    return mockBackendInstance.getWalletStats(lawyerId);
+  async getWalletStats(lawyerId: string): Promise<WalletStats> {
+    return httpClient<WalletStats>('GET', `/lawyer/wallet/${lawyerId}`);
   },
 
-  async getTips(lawyerId: string) {
-    logRequest('GET', `/lawyer/tips/${lawyerId}`);
-    return mockBackendInstance.getLawyerTips(lawyerId);
+  async getTips(lawyerId: string): Promise<Tip[]> {
+    return httpClient<Tip[]>('GET', `/lawyer/tips/${lawyerId}`);
   },
 
   async acceptProcess(id: string, lawyerId: string): Promise<boolean> {
-    logRequest('POST', `/lawyer/processes/${id}/accept`, { lawyerId });
-    return mockBackendInstance.acceptOpportunity(id, lawyerId);
+    // LawyerId agora é inferido pelo token no backend, mas mantemos assinatura
+    return httpClient<boolean>('POST', `/lawyer/processes/${id}/accept`);
   },
 
   async updateProcessStatus(id: string, data: { status: string, note: string, files: File[] }): Promise<boolean> {
-    // Conversão de status string para Enum
-    let newStatus = ProcessStatus.IN_PROGRESS;
-    if (data.status === 'Finalizado') newStatus = ProcessStatus.FINISHED;
-    if (data.status === 'Aguardando Pagamento') newStatus = ProcessStatus.AWAITING_PAYMENT;
-
-    logRequest('PUT', `/lawyer/processes/${id}/status`, { 
-        status: newStatus, 
-        note: data.note, 
-        filesCount: data.files.length 
-    });
-
-    return mockBackendInstance.updateProcessStatus(id, {
-        status: newStatus,
-        lastUpdateNote: data.status, // Usando o label vindo do front
+    return httpClient<boolean>('PUT', `/lawyer/processes/${id}/status`, {
+        status: data.status,
         description: data.note
     });
   }

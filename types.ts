@@ -54,6 +54,21 @@ export interface TimelineEvent {
   attachmentName?: string;
 }
 
+export interface WalletStats {
+  totalAccepted: number;
+  retained: number;
+  receivableThisMonth: number;
+  activeCount: number;
+  finishedCount: number;
+  totalCount: number;
+}
+
+export interface Tip {
+  title: string;
+  description: string;
+  type: 'urgent' | 'info' | 'success';
+}
+
 export interface User {
   id?: string;
   phone: string;
@@ -71,5 +86,13 @@ export interface User {
   oabPdfUrl?: string;
   specialty?: string;
   verificationStatus?: 'PENDING' | 'UNDER_ANALYSIS' | 'VERIFIED' | 'REJECTED';
-  createdAt?: string; // Data de criação da conta
+  createdAt?: string;
+}
+
+// Resposta Padrão da API
+export interface ApiResponse<T = any> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  status: number;
 }
