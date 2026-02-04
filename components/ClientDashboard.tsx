@@ -97,6 +97,16 @@ const ClientDashboard: React.FC<{ onLogout: () => void, user: User }> = ({ onLog
     return v;
   };
 
+  // Helper para formatar data "Desde..."
+  const formatMemberSince = (dateString?: string) => {
+      if (!dateString) return 'Membro Recente';
+      const date = new Date(dateString);
+      // Ex: Desde Out/2023
+      const month = date.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
+      const year = date.getFullYear();
+      return `Desde ${month.charAt(0).toUpperCase() + month.slice(1)}/${year}`;
+  };
+
   // Validador de Data Futura (> 30 dias)
   const validateFutureDate = (dateString: string): boolean => {
     if (!dateString || dateString.length !== 10) return false;
@@ -673,7 +683,7 @@ const ClientDashboard: React.FC<{ onLogout: () => void, user: User }> = ({ onLog
                    <div className="space-y-2">
                         <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-4">Plataforma Ativa</label>
                         <div className="w-full px-8 py-5 bg-slate-100 border-2 border-transparent rounded-[1.8rem] font-bold text-slate-400 flex items-center justify-between opacity-70 cursor-not-allowed">
-                            <span>Desde Out/2023</span>
+                            <span>{formatMemberSince(user.createdAt)}</span>
                             <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
                         </div>
                    </div>

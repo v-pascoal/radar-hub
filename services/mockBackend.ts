@@ -1,11 +1,13 @@
 
-import { ProcessRequest, ProcessStatus, User, UserRole, FineDetail } from '../types';
+import { ProcessRequest, ProcessStatus, User, UserRole, FineDetail, TimelineEvent } from '../types';
 
 // Interfaces de Banco de Dados Simulado
 interface DB {
   users: User[];
   processes: ProcessRequest[];
   historyDetails: Record<string, any>; // Detalhes estendidos para o histórico
+  processTimelines: Record<string, TimelineEvent[]>; // Nova tabela de timelines
+  tips: { title: string; description: string; type: 'urgent' | 'info' | 'success' }[]; // Tabela de Dicas CMS
 }
 
 // Dados Iniciais do "Banco"
@@ -27,7 +29,8 @@ const INITIAL_DB: DB = {
       avatar: 'https://i.pravatar.cc/150?u=lawyer_1',
       specialty: 'Direito de Trânsito',
       birthDate: '10/05/1980',
-      verificationStatus: 'VERIFIED'
+      verificationStatus: 'VERIFIED',
+      createdAt: '2023-01-15T10:00:00Z'
     },
     {
       id: 'lawyer_2',
@@ -44,7 +47,8 @@ const INITIAL_DB: DB = {
       avatar: 'https://i.pravatar.cc/150?u=lawyer_2',
       specialty: 'Processos Administrativos',
       birthDate: '15/08/1985',
-      verificationStatus: 'VERIFIED'
+      verificationStatus: 'VERIFIED',
+      createdAt: '2023-03-20T14:30:00Z'
     },
     // --- ADVOGADO (PENDENTE DE DOCS) ---
     {
@@ -59,7 +63,8 @@ const INITIAL_DB: DB = {
       avatar: '',
       specialty: 'Multas',
       birthDate: '20/01/1990',
-      verificationStatus: 'PENDING'
+      verificationStatus: 'PENDING',
+      createdAt: new Date().toISOString()
     },
     
     // --- CONDUTORES (VERIFICADOS) ---
@@ -74,7 +79,8 @@ const INITIAL_DB: DB = {
       documentPdfUrl: 'mock_doc_client.pdf', 
       avatar: 'https://i.pravatar.cc/150?u=client_1',
       birthDate: '01/02/1980',
-      verificationStatus: 'VERIFIED'
+      verificationStatus: 'VERIFIED',
+      createdAt: '2023-10-05T09:00:00Z' // Data usada no mock do "Desde..."
     },
     {
       id: 'client_2',
@@ -87,7 +93,8 @@ const INITIAL_DB: DB = {
       documentPdfUrl: 'mock_doc_ana.pdf',
       avatar: 'https://i.pravatar.cc/150?u=client_2',
       birthDate: '10/10/1992',
-      verificationStatus: 'VERIFIED'
+      verificationStatus: 'VERIFIED',
+      createdAt: '2023-11-12T16:20:00Z'
     },
     // --- CONDUTOR (PENDENTE DE DOCS) ---
     {
@@ -100,7 +107,8 @@ const INITIAL_DB: DB = {
       // Sem URL de documento
       avatar: '',
       birthDate: '05/05/1995',
-      verificationStatus: 'PENDING'
+      verificationStatus: 'PENDING',
+      createdAt: new Date().toISOString()
     }
   ],
   processes: [
@@ -109,16 +117,18 @@ const INITIAL_DB: DB = {
         id: 'proc_active_1',
         readable_id: 'RAD-7721',
         client_id: 'client_1',
+        lawyer_id: 'lawyer_1',
         clientName: 'Roberto Almeida',
         type: 'Suspensão',
         totalPoints: 22,
         fines: [{ id: 'f1', points: 7, documentUrl: 'url_mock', documentName: 'Multa_Velocidade.pdf' }],
         value: 490,
         deadline: '24h',
-        status: ProcessStatus.AWAITING_LAWYERS,
+        status: ProcessStatus.AWAITING_PROTOCOL,
         description: 'Multa por excesso de velocidade capturada por radar fixo em rodovia federal.',
-        created_at: new Date().toISOString(),
-        lastUpdateNote: 'Aguardando Advogados'
+        created_at: new Date(Date.now() - 86400000 * 5).toISOString(), // 5 dias atrás
+        lastUpdateNote: 'Aguardando Protocolação',
+        processNumber: '0012345-67.2024'
     },
     {
         id: 'proc_hist_1',
@@ -155,6 +165,99 @@ const INITIAL_DB: DB = {
         lawyer_id: 'lawyer_2', // Dra. Fernanda já pegou esse
         created_at: '2023-11-15'
     }
+  ],
+  processTimelines: {
+      'proc_active_1': [
+          {
+              id: 'evt_1',
+              processId: 'proc_active_1',
+              date: new Date(Date.now() - 3600000 * 2).toISOString(), // 2 horas atrás
+              title: 'Solicitação de Documento',
+              description: 'Roberto, preciso de uma cópia legível do seu comprovante de residência atualizado para finalizar a peça.',
+              authorRole: 'LAWYER',
+              authorName: 'Dr. Carlos Mendes',
+              type: 'MESSAGE'
+          },
+          {
+              id: 'evt_2',
+              processId: 'proc_active_1',
+              date: new Date(Date.now() - 86400000 * 1).toISOString(), // 1 dia atrás
+              title: 'Atualização de Status',
+              description: 'Fase de elaboração da defesa prévia iniciada.',
+              authorRole: 'LAWYER',
+              authorName: 'Dr. Carlos Mendes',
+              type: 'STATUS_CHANGE'
+          },
+          {
+              id: 'evt_3',
+              processId: 'proc_active_1',
+              date: new Date(Date.now() - 86400000 * 2).toISOString(), // 2 dias atrás
+              title: 'Pagamento Confirmado',
+              description: 'Os honorários foram retidos na plataforma. Advogado autorizado a iniciar.',
+              authorRole: 'SYSTEM',
+              authorName: 'Radar Hub',
+              type: 'STATUS_CHANGE'
+          },
+          {
+              id: 'evt_4',
+              processId: 'proc_active_1',
+              date: new Date(Date.now() - 86400000 * 3).toISOString(), // 3 dias atrás
+              title: 'Dúvida sobre prazo',
+              description: 'Doutor, qual a previsão para darmos entrada? Meu prazo vence semana que vem.',
+              authorRole: 'CLIENT',
+              authorName: 'Roberto Almeida',
+              type: 'MESSAGE'
+          },
+          {
+              id: 'evt_5',
+              processId: 'proc_active_1',
+              date: new Date(Date.now() - 86400000 * 4).toISOString(), // 4 dias atrás
+              title: 'Causa Aceita',
+              description: 'O advogado aceitou sua solicitação. Aguardando pagamento.',
+              authorRole: 'LAWYER',
+              authorName: 'Dr. Carlos Mendes',
+              type: 'STATUS_CHANGE'
+          },
+          {
+              id: 'evt_6',
+              processId: 'proc_active_1',
+              date: new Date(Date.now() - 86400000 * 5).toISOString(), // 5 dias atrás
+              title: 'Solicitação Criada',
+              description: 'Solicitação de defesa enviada para análise dos advogados.',
+              authorRole: 'CLIENT',
+              authorName: 'Roberto Almeida',
+              type: 'STATUS_CHANGE'
+          }
+      ],
+      'proc_ana_1': [
+          {
+              id: 'evt_ana_1',
+              processId: 'proc_ana_1',
+              date: new Date().toISOString(),
+              title: 'Análise Iniciada',
+              description: 'Estou analisando as multas anexadas.',
+              authorRole: 'LAWYER',
+              authorName: 'Dra. Fernanda Lima',
+              type: 'MESSAGE'
+          }
+      ]
+  },
+  tips: [
+      {
+          title: "Agilidade na Avaliação",
+          description: "Aceite e avalie os casos disponíveis rapidamente. Os primeiros a aceitar têm 80% mais chance de fechar o contrato.",
+          type: 'urgent'
+      },
+      {
+          title: "Protocolo Expresso",
+          description: "Protocole o pedido do cliente nas primeiras 48 horas. Isso libera a primeira parcela dos seus honorários imediatamente.",
+          type: 'info'
+      },
+      {
+          title: "Comunicação Proativa",
+          description: "Atualize o status a cada movimentação. Clientes informados avaliam melhor o serviço final.",
+          type: 'success'
+      }
   ],
   historyDetails: {
     'proc_hist_1': {
@@ -201,13 +304,13 @@ export class MockBackend {
 
   constructor() {
     // Carrega do localStorage para persistência entre reloads ou usa inicial
-    const saved = localStorage.getItem('mock_db_v5'); // Versionamento para limpar dados antigos se necessário
+    const saved = localStorage.getItem('mock_db_v6'); // Versionamento para limpar dados antigos se necessário
     this.db = saved ? JSON.parse(saved) : INITIAL_DB;
     this.otpStore = new Map();
   }
 
   private save() {
-    localStorage.setItem('mock_db_v5', JSON.stringify(this.db));
+    localStorage.setItem('mock_db_v6', JSON.stringify(this.db));
   }
 
   // --- RabbitMQ Simulators ---
@@ -282,7 +385,8 @@ export class MockBackend {
                 role: role,
                 isLoggedIn: true,
                 token: `mock_jwt_${Date.now()}`,
-                verificationStatus: 'PENDING'
+                verificationStatus: 'PENDING',
+                createdAt: new Date().toISOString()
             };
             this.db.users.push(user);
             this.save();
@@ -361,6 +465,12 @@ export class MockBackend {
     }
   }
 
+  // --- NOVO MÉTODO DE TIMELINE ---
+  async getProcessTimeline(processId: string): Promise<TimelineEvent[]> {
+      await new Promise(r => setTimeout(r, 700));
+      return this.db.processTimelines[processId] || [];
+  }
+
   async getWalletStats(userId: string) {
       await new Promise(r => setTimeout(r, 600));
       
@@ -386,26 +496,10 @@ export class MockBackend {
       };
   }
 
-  // --- MOCK DICAS PARA ADVOGADOS ---
+  // --- MOCK DICAS PARA ADVOGADOS (BUSCA DO DB AGORA) ---
   async getLawyerTips(userId: string): Promise<{ title: string; description: string; type: 'urgent' | 'info' | 'success' }[]> {
       await new Promise(r => setTimeout(r, 400));
-      return [
-          {
-              title: "Agilidade na Avaliação",
-              description: "Aceite e avalie os casos disponíveis rapidamente. Os primeiros a aceitar têm 80% mais chance de fechar o contrato.",
-              type: 'urgent'
-          },
-          {
-              title: "Protocolo Expresso",
-              description: "Protocole o pedido do cliente nas primeiras 48 horas. Isso libera a primeira parcela dos seus honorários imediatamente.",
-              type: 'info'
-          },
-          {
-              title: "Comunicação Proativa",
-              description: "Atualize o status a cada movimentação. Clientes informados avaliam melhor o serviço final.",
-              type: 'success'
-          }
-      ];
+      return this.db.tips;
   }
 
   async getHistoryDetail(processId: string) {
@@ -446,6 +540,19 @@ export class MockBackend {
     };
 
     this.db.processes.unshift(newProcess);
+    
+    // Inicia uma timeline vazia ou com evento inicial
+    this.db.processTimelines[newId] = [{
+        id: `evt_init_${newId}`,
+        processId: newId,
+        date: new Date().toISOString(),
+        title: 'Solicitação Criada',
+        description: 'O cliente iniciou a solicitação de defesa.',
+        authorRole: 'CLIENT',
+        authorName: processData.clientName || 'Cliente',
+        type: 'STATUS_CHANGE'
+    }];
+
     this.save();
 
     // Simula envio para fila de ingestão de processos
@@ -469,6 +576,21 @@ export class MockBackend {
     const index = this.db.processes.findIndex(p => p.id === id);
     if (index !== -1) {
         this.db.processes[index] = { ...this.db.processes[index], ...updateData };
+        
+        // Adiciona evento na timeline se houver atualização de status
+        if (!this.db.processTimelines[id]) this.db.processTimelines[id] = [];
+        
+        this.db.processTimelines[id].unshift({
+            id: `evt_upd_${Date.now()}`,
+            processId: id,
+            date: new Date().toISOString(),
+            title: updateData.lastUpdateNote || 'Atualização de Status',
+            description: updateData.description || `Status alterado para ${updateData.status}`,
+            authorRole: 'LAWYER',
+            authorName: 'Advogado', // Simplificado
+            type: 'STATUS_CHANGE'
+        });
+
         this.save();
 
         // Simula evento de atualização de status para notificação
@@ -489,6 +611,21 @@ export class MockBackend {
   }
 
   async acceptOpportunity(processId: string, lawyerId: string) {
+      // Adiciona evento de aceite
+      if (!this.db.processTimelines[processId]) this.db.processTimelines[processId] = [];
+      const lawyer = this.db.users.find(u => u.id === lawyerId);
+      
+      this.db.processTimelines[processId].unshift({
+          id: `evt_accept_${Date.now()}`,
+          processId: processId,
+          date: new Date().toISOString(),
+          title: 'Causa Aceita',
+          description: `O advogado ${lawyer?.name || 'Parceiro'} aceitou a solicitação.`,
+          authorRole: 'LAWYER',
+          authorName: lawyer?.name || 'Advogado',
+          type: 'STATUS_CHANGE'
+      });
+
       return this.updateProcessStatus(processId, {
           status: ProcessStatus.AWAITING_PAYMENT,
           lastUpdateNote: 'Aguardando Pagamento',

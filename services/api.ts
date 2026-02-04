@@ -1,5 +1,5 @@
 
-import { User, UserRole, ProcessRequest, ProcessStatus } from '../types';
+import { User, UserRole, ProcessRequest, ProcessStatus, TimelineEvent } from '../types';
 import { mockBackendInstance } from './mockBackend';
 
 const API_BASE_URL = 'https://api.radarhub.com.br/v1';
@@ -67,6 +67,11 @@ export const DatabaseService = {
   async getLawyerProcesses(lawyerId: string): Promise<ProcessRequest[]> {
     logRequest('GET', `/lawyer/processes?lawyerId=${lawyerId}`);
     return mockBackendInstance.getMyProcesses(lawyerId, UserRole.LAWYER);
+  },
+
+  async getProcessTimeline(processId: string): Promise<TimelineEvent[]> {
+    logRequest('GET', `/lawyer/processes/${processId}/timeline`);
+    return mockBackendInstance.getProcessTimeline(processId);
   },
 
   async getWalletStats(lawyerId: string) {

@@ -41,6 +41,19 @@ export interface ProcessRequest {
   updated_at?: string;
 }
 
+export interface TimelineEvent {
+  id: string;
+  processId: string;
+  date: string;
+  title: string;
+  description: string;
+  authorRole: 'CLIENT' | 'LAWYER' | 'SYSTEM';
+  authorName: string;
+  type: 'MESSAGE' | 'STATUS_CHANGE' | 'DOCUMENT';
+  attachmentUrl?: string;
+  attachmentName?: string;
+}
+
 export interface User {
   id?: string;
   phone: string;
@@ -58,4 +71,5 @@ export interface User {
   oabPdfUrl?: string;
   specialty?: string;
   verificationStatus?: 'PENDING' | 'UNDER_ANALYSIS' | 'VERIFIED' | 'REJECTED';
+  createdAt?: string; // Data de criação da conta
 }

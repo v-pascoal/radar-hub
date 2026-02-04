@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ProcessRequest, ProcessStatus, User } from '../types';
+import { ProcessRequest, ProcessStatus, User, TimelineEvent } from '../types';
 import { DatabaseService, RadarApiService } from '../services/api';
 
 const LawyerDashboard: React.FC<{ onLogout: () => void, user: User }> = ({ onLogout, user }) => {
@@ -19,7 +19,11 @@ const LawyerDashboard: React.FC<{ onLogout: () => void, user: User }> = ({ onLog
   const [selectedProcessForUpdate, setSelectedProcessForUpdate] = useState<ProcessRequest | null>(null);
   const [updateFormData, setUpdateFormData] = useState({ processNumber: '', statusLabel: '', note: '', attachedFiles: [] as File[] });
 
+  // Detalhes e Timeline
   const [selectedProcessForDetails, setSelectedProcessForDetails] = useState<ProcessRequest | null>(null);
+  const [detailTab, setDetailTab] = useState<'info' | 'timeline'>('info');
+  const [timelineData, setTimelineData] = useState<TimelineEvent[]>([]);
+  const [isLoadingTimeline, setIsLoadingTimeline] = useState(false);
 
   const [profileData, setProfileData] = useState({
     name: user.name || '',
@@ -30,7 +34,6 @@ const LawyerDashboard: React.FC<{ onLogout: () => void, user: User }> = ({ onLog
 
   // --- ESTADOS DE VERIFICAÇÃO ---
   const [verificationStatus, setVerificationStatus] = useState(user.verificationStatus || 'PENDING');
-  const [rejectionReason, setRejectionReason] = useState('Documentação pendente. Envie CNH e OAB.');
   
   const [oabDoc, setOabDoc] = useState<{ name: string; url: string } | null>(user.oabPdfUrl ? { name: 'Comprovante_OAB.pdf', url: user.oabPdfUrl } : null);
   const [idDoc, setIdDoc] = useState<{ name: string; url: string } | null>(user.documentPdfUrl ? { name: 'CNH_CPF.pdf', url: user.documentPdfUrl } : null);
@@ -88,7 +91,6 @@ const LawyerDashboard: React.FC<{ onLogout: () => void, user: User }> = ({ onLog
   };
 
   useEffect(() => {
-    // Atualiza status baseado na prop user
     if (user.verificationStatus) {
         setVerificationStatus(user.verificationStatus);
         setShowDocAlert(user.verificationStatus === 'PENDING' || user.verificationStatus === 'REJECTED');
@@ -112,6 +114,17 @@ const LawyerDashboard: React.FC<{ onLogout: () => void, user: User }> = ({ onLog
     };
     fetchData();
   }, [user.id, user.verificationStatus]);
+
+  // Carrega timeline ao mudar a aba de detalhes
+  useEffect(() => {
+      if (selectedProcessForDetails && detailTab === 'timeline') {
+          setIsLoadingTimeline(true);
+          DatabaseService.getProcessTimeline(selectedProcessForDetails.id)
+            .then(data => setTimelineData(data))
+            .catch(() => setTimelineData([]))
+            .finally(() => setIsLoadingTimeline(false));
+      }
+  }, [selectedProcessForDetails, detailTab]);
 
   const handleOpenUpdateModal = (p:any) => { setSelectedProcessForUpdate(p); setUpdateFormData({ processNumber: p.processNumber || '', statusLabel: p.lastUpdateNote || 'Aguardando Pagamento', note: '', attachedFiles: [] }); setIsUpdateModalOpen(true); };
   const handleStatusFilesChange = (e:any) => { const files = Array.from(e.target.files || []); setUpdateFormData(prev => ({ ...prev, attachedFiles: [...prev.attachedFiles, ...files] as File[] })); };
@@ -215,6 +228,11 @@ const LawyerDashboard: React.FC<{ onLogout: () => void, user: User }> = ({ onLog
     }
   };
 
+  const formatDate = (isoString: string) => {
+      const date = new Date(isoString);
+      return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  };
+
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-[#F8FAFC]">
       {/* Mobile Header */}
@@ -226,22 +244,11 @@ const LawyerDashboard: React.FC<{ onLogout: () => void, user: User }> = ({ onLog
             </div>
          </div>
          <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="text-white p-1">
-            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              {isMobileMenuOpen ? (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-              ) : (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
-              )}
-            </svg>
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
          </button>
       </div>
-
-      {/* Backdrop */}
-      {isMobileMenuOpen && (
-        <div className="fixed inset-0 bg-black/50 z-30 md:hidden backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)}></div>
-      )}
-
-      {/* Sidebar */}
+      {isMobileMenuOpen && <div className="fixed inset-0 bg-black/50 z-30 md:hidden backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)}></div>}
+      
       <aside className={`fixed inset-y-0 left-0 z-40 w-72 md:w-80 bg-[#1e1b4b] text-white p-8 flex flex-col shadow-2xl md:relative md:translate-x-0 transition-transform duration-300 ease-in-out md:h-screen md:sticky md:top-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
          <div className="mb-12 hidden md:flex items-center gap-3">
             <div className="w-8 h-8 bg-[#593EFF] rounded-lg flex items-center justify-center font-black italic shadow-lg shadow-indigo-500/20">R</div>
@@ -250,24 +257,18 @@ const LawyerDashboard: React.FC<{ onLogout: () => void, user: User }> = ({ onLog
               <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest mt-1">SISTEMA JURÍDICO</span>
             </div>
          </div>
-         
          <nav className="flex-grow space-y-2 mt-4 md:mt-0">
             {[
               { id: 'wallet', label: 'Minha Carteira', icon: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' },
               { id: 'new_requests', label: 'Novos Processos', icon: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' },
               { id: 'my_processes', label: 'Meus Processos', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01' },
             ].map(item => (
-              <button 
-                key={item.id} 
-                onClick={() => { setActiveTab(item.id as any); setIsMobileMenuOpen(false); }} 
-                className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${activeTab === item.id ? 'bg-[#593EFF] text-white shadow-xl' : 'text-slate-400 hover:text-white'}`}
-              >
+              <button key={item.id} onClick={() => { setActiveTab(item.id as any); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${activeTab === item.id ? 'bg-[#593EFF] text-white shadow-xl' : 'text-slate-400 hover:text-white'}`}>
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={item.icon} /></svg>
                 {item.label}
               </button>
             ))}
          </nav>
-
          <div className="mt-auto pt-8 border-t border-white/5 flex flex-col gap-2">
             <button onClick={() => { setActiveTab('profile'); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${activeTab === 'profile' ? 'bg-white/10 text-white shadow-inner' : 'text-slate-400 hover:text-white'}`}>
               Meu Perfil
@@ -363,38 +364,7 @@ const LawyerDashboard: React.FC<{ onLogout: () => void, user: User }> = ({ onLog
                </div>
             </div>
           )}
-          {activeTab === 'my_processes' && (
-             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <header className="mb-12">
-                  <h2 className="text-4xl font-black text-[#1e1b4b] italic uppercase tracking-tighter">Meus <span className="text-[#593EFF]">Processos</span></h2>
-              </header>
-              <div className="grid grid-cols-1 gap-6">
-                {myProcesses.length === 0 ? (
-                    <div className="py-24 text-center bg-white rounded-[3rem] border border-slate-100">
-                        <div className="text-4xl mb-4 grayscale opacity-20">📂</div>
-                        <h4 className="text-xl font-black text-slate-300 uppercase italic tracking-tighter">Nenhum processo ativo</h4>
-                    </div>
-                ) : myProcesses.map(process => (
-                   <div key={process.id} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-sm group hover:shadow-xl transition-all">
-                      <div className="flex items-center gap-6">
-                         <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center text-[#593EFF]">
-                            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                         </div>
-                         <div>
-                            <span className="text-[9px] font-black text-[#593EFF] uppercase tracking-widest">{process.readable_id}</span>
-                            <h3 className="text-xl font-black text-[#1e1b4b] uppercase italic">{process.clientName}</h3>
-                            <p className="text-[10px] text-slate-400 font-bold mt-1">Nº: {process.processNumber || 'Aguardando protocolo'}</p>
-                         </div>
-                      </div>
-                      <div className="flex gap-3">
-                         <button onClick={() => handleOpenUpdateModal(process)} className="px-6 py-4 border-2 border-slate-100 text-[#1e1b4b] font-black uppercase text-[10px] rounded-2xl hover:bg-slate-50 transition-colors">Atualizar Status</button>
-                         <button onClick={() => setSelectedProcessForDetails(process)} className="px-8 py-4 bg-[#1e1b4b] text-white font-black uppercase text-[10px] rounded-2xl hover:bg-[#593EFF] transition-colors shadow-lg shadow-indigo-100/20">Detalhes</button>
-                      </div>
-                   </div>
-                ))}
-              </div>
-            </div>
-          )}
+
           {activeTab === 'new_requests' && (
              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in slide-in-from-bottom-4">
               {requests.length === 0 ? (
@@ -457,10 +427,9 @@ const LawyerDashboard: React.FC<{ onLogout: () => void, user: User }> = ({ onLog
                       </div>
                    </header>
 
-                   {/* Cards de Upload (CNH e OAB) - Mantidos iguais */}
+                   {/* Cards de Upload (CNH e OAB) */}
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
                       <div onClick={() => documentPdfRef.current?.click()} className={`p-8 border-2 border-dashed rounded-[2.5rem] flex flex-col items-center justify-center cursor-pointer transition-all ${idFileChanged ? 'border-[#593EFF] bg-indigo-50/30' : 'border-slate-200 bg-slate-50 hover:border-[#593EFF]'}`}>
-                         {/* ... CNH ... */}
                          <h4 className="text-[10px] font-black text-[#1e1b4b] uppercase tracking-widest mb-4 text-center">CNH / CPF</h4>
                          <div className={`px-4 py-2 rounded-xl flex items-center gap-2 mb-4 ${idDoc ? 'bg-[#593EFF] text-white shadow-lg shadow-indigo-200' : 'bg-white text-slate-400 shadow-inner'}`}>
                             <span className="text-[9px] font-black uppercase truncate max-w-[120px]">{idDoc ? idDoc.name : 'pdf file'}</span>
@@ -474,7 +443,6 @@ const LawyerDashboard: React.FC<{ onLogout: () => void, user: User }> = ({ onLog
                       </div>
 
                       <div onClick={() => oabPdfRef.current?.click()} className={`p-8 border-2 border-dashed rounded-[2.5rem] flex flex-col items-center justify-center cursor-pointer transition-all ${oabFileChanged ? 'border-[#593EFF] bg-indigo-50/30' : 'border-slate-200 bg-slate-50 hover:border-[#593EFF]'}`}>
-                         {/* ... OAB ... */}
                          <h4 className="text-[10px] font-black text-[#1e1b4b] uppercase tracking-widest mb-4 text-center">Comprovante OAB</h4>
                          <div className={`px-4 py-2 rounded-xl flex items-center gap-2 mb-4 ${oabDoc ? 'bg-[#593EFF] text-white shadow-lg shadow-indigo-200' : 'bg-white text-slate-400 shadow-inner'}`}>
                             <span className="text-[9px] font-black uppercase truncate max-w-[120px]">{oabDoc ? oabDoc.name : 'pdf file'}</span>
@@ -490,7 +458,6 @@ const LawyerDashboard: React.FC<{ onLogout: () => void, user: User }> = ({ onLog
 
                    {/* Form Dados */}
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-                      {/* ... inputs mantidos ... */}
                       <div className="space-y-6">
                          <div className="space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-4">Nome Completo *</label><input type="text" required className="w-full px-8 py-5 bg-slate-50 border-2 border-transparent rounded-[1.8rem] focus:border-[#593EFF]/20 outline-none font-bold text-[#1e1b4b] shadow-inner" value={profileData.name} onChange={(e) => setProfileData({...profileData, name: e.target.value})} /></div>
                          <div className="space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-4">CPF *</label><input type="text" required className="w-full px-8 py-5 bg-slate-50 border-2 border-transparent rounded-[1.8rem] focus:border-[#593EFF]/20 outline-none font-bold text-[#1e1b4b] shadow-inner" value={profileData.cpf} onChange={(e) => setProfileData({...profileData, cpf: maskCPF(e.target.value)})} /></div>
@@ -507,10 +474,43 @@ const LawyerDashboard: React.FC<{ onLogout: () => void, user: User }> = ({ onLog
                 </div>
              </div>
           )}
+
+          {activeTab === 'my_processes' && (
+             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <header className="mb-12">
+                  <h2 className="text-4xl font-black text-[#1e1b4b] italic uppercase tracking-tighter">Meus <span className="text-[#593EFF]">Processos</span></h2>
+              </header>
+              <div className="grid grid-cols-1 gap-6">
+                {myProcesses.length === 0 ? (
+                    <div className="py-24 text-center bg-white rounded-[3rem] border border-slate-100">
+                        <div className="text-4xl mb-4 grayscale opacity-20">📂</div>
+                        <h4 className="text-xl font-black text-slate-300 uppercase italic tracking-tighter">Nenhum processo ativo</h4>
+                    </div>
+                ) : myProcesses.map(process => (
+                   <div key={process.id} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-sm group hover:shadow-xl transition-all">
+                      <div className="flex items-center gap-6">
+                         <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center text-[#593EFF]">
+                            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                         </div>
+                         <div>
+                            <span className="text-[9px] font-black text-[#593EFF] uppercase tracking-widest">{process.readable_id}</span>
+                            <h3 className="text-xl font-black text-[#1e1b4b] uppercase italic">{process.clientName}</h3>
+                            <p className="text-[10px] text-slate-400 font-bold mt-1">Nº: {process.processNumber || 'Aguardando protocolo'}</p>
+                         </div>
+                      </div>
+                      <div className="flex gap-3">
+                         <button onClick={() => handleOpenUpdateModal(process)} className="px-6 py-4 border-2 border-slate-100 text-[#1e1b4b] font-black uppercase text-[10px] rounded-2xl hover:bg-slate-50 transition-colors">Atualizar Status</button>
+                         <button onClick={() => { setSelectedProcessForDetails(process); setDetailTab('info'); }} className="px-8 py-4 bg-[#1e1b4b] text-white font-black uppercase text-[10px] rounded-2xl hover:bg-[#593EFF] transition-colors shadow-lg shadow-indigo-100/20">Detalhes</button>
+                      </div>
+                   </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </main>
       
-      {/* Modais */}
+      {/* Update Modal */}
       {isUpdateModalOpen && selectedProcessForUpdate && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#1e1b4b]/95 backdrop-blur-md animate-in fade-in duration-300">
           <div className="bg-white w-full max-w-xl rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh]">
@@ -524,26 +524,14 @@ const LawyerDashboard: React.FC<{ onLogout: () => void, user: User }> = ({ onLog
                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
                    </button>
                 </header>
-
                 <div className="space-y-6">
                    <div className="space-y-1">
-                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-4">Número do Processo Judicial/Adm</label>
-                      <input 
-                        type="text" 
-                        placeholder="Ex: 0012345-67.2023.8.26..." 
-                        className="w-full px-8 py-5 bg-slate-50 border-2 border-transparent rounded-[1.8rem] outline-none focus:border-[#593EFF]/20 font-bold text-[#1e1b4b] shadow-inner"
-                        value={updateFormData.processNumber}
-                        onChange={e => setUpdateFormData({...updateFormData, processNumber: e.target.value})}
-                      />
+                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-4">Número do Processo</label>
+                      <input type="text" placeholder="Ex: 0012345..." className="w-full px-8 py-5 bg-slate-50 border-2 border-transparent rounded-[1.8rem] outline-none focus:border-[#593EFF]/20 font-bold text-[#1e1b4b] shadow-inner" value={updateFormData.processNumber} onChange={e => setUpdateFormData({...updateFormData, processNumber: e.target.value})} />
                    </div>
-
                    <div className="space-y-1">
-                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-4">Status do Andamento</label>
-                      <select 
-                        className="w-full px-8 py-5 bg-slate-50 border-2 border-transparent rounded-[1.8rem] outline-none focus:border-[#593EFF]/20 font-bold text-[#1e1b4b] appearance-none cursor-pointer"
-                        value={updateFormData.statusLabel}
-                        onChange={e => setUpdateFormData({...updateFormData, statusLabel: e.target.value, attachedFiles: []})}
-                      >
+                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-4">Status</label>
+                      <select className="w-full px-8 py-5 bg-slate-50 border-2 border-transparent rounded-[1.8rem] outline-none focus:border-[#593EFF]/20 font-bold text-[#1e1b4b] appearance-none cursor-pointer" value={updateFormData.statusLabel} onChange={e => setUpdateFormData({...updateFormData, statusLabel: e.target.value, attachedFiles: []})}>
                          <option value="Aguardando Pagamento">Aguardando Pagamento</option>
                          <option value="Aguardando Protocolação">Aguardando Protocolação</option>
                          <option value="Protocolado">Protocolado</option>
@@ -552,55 +540,10 @@ const LawyerDashboard: React.FC<{ onLogout: () => void, user: User }> = ({ onLog
                          <option value="Finalizado">Finalizado</option>
                       </select>
                    </div>
-
-                   {['Protocolado', 'Finalizado'].includes(updateFormData.statusLabel) && (
-                     <div className="space-y-4 animate-in slide-in-from-top-4">
-                        <div className="p-6 bg-indigo-50 border-2 border-indigo-100 rounded-3xl space-y-3">
-                           <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 bg-indigo-600 text-white rounded-lg flex items-center justify-center text-xs">📄</div>
-                              <h4 className="text-[10px] font-black uppercase text-indigo-900">Anexar Comprovantes (PDF)</h4>
-                           </div>
-                           <p className="text-[9px] text-indigo-700 font-bold leading-relaxed">
-                              Atenção: Para este status, é obrigatório anexar comprovantes. A alteração será validada pela Consultoria Jurídica da Radar em até <span className="underline italic">24h úteis</span>.
-                           </p>
-                           
-                           <div className="space-y-2">
-                              {updateFormData.attachedFiles.map((file, idx) => (
-                                 <div key={idx} className="flex items-center justify-between p-3 bg-white rounded-xl border border-indigo-200">
-                                    <span className="text-[9px] font-black text-[#1e1b4b] truncate max-w-[80%]">{file.name}</span>
-                                    <button onClick={() => removeStatusFile(idx)} className="text-rose-500 font-black text-xs hover:scale-110 transition-transform">✕</button>
-                                 </div>
-                              ))}
-                              <button 
-                                 type="button" 
-                                 onClick={() => statusFilesRef.current?.click()}
-                                 className="w-full py-4 border-2 border-dashed border-indigo-200 rounded-xl text-[9px] font-black text-indigo-400 uppercase tracking-widest hover:bg-white transition-colors"
-                              >
-                                 + Adicionar Documentos
-                              </button>
-                              <input 
-                                 type="file" 
-                                 ref={statusFilesRef} 
-                                 className="hidden" 
-                                 accept=".pdf" 
-                                 multiple 
-                                 onChange={handleStatusFilesChange} 
-                              />
-                           </div>
-                        </div>
-                     </div>
-                   )}
-
                    <div className="space-y-1">
-                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-4">Nota Explicativa (Texto Livre)</label>
-                      <textarea 
-                        placeholder="Descreva aqui o último passo ou orientação para o cliente..." 
-                        className="w-full px-8 py-5 bg-slate-50 border-2 border-transparent rounded-[1.8rem] outline-none focus:border-[#593EFF]/20 font-bold text-[#1e1b4b] h-32 resize-none shadow-inner"
-                        value={updateFormData.note}
-                        onChange={e => setUpdateFormData({...updateFormData, note: e.target.value})}
-                      />
+                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-4">Nota Explicativa</label>
+                      <textarea placeholder="Descreva aqui..." className="w-full px-8 py-5 bg-slate-50 border-2 border-transparent rounded-[1.8rem] outline-none focus:border-[#593EFF]/20 font-bold text-[#1e1b4b] h-32 resize-none shadow-inner" value={updateFormData.note} onChange={e => setUpdateFormData({...updateFormData, note: e.target.value})} />
                    </div>
-
                    <div className="pt-4 flex gap-4">
                       <button onClick={handleSaveUpdate} className="flex-grow py-5 bg-[#593EFF] text-white font-black rounded-2xl uppercase text-[10px] tracking-widest shadow-xl shadow-indigo-100 hover:scale-[1.02] active:scale-95 transition-all">Salvar Atualização</button>
                       <button onClick={() => setIsUpdateModalOpen(false)} className="px-10 py-5 bg-slate-50 text-slate-400 font-black rounded-2xl uppercase text-[10px] tracking-widest">Cancelar</button>
@@ -611,81 +554,140 @@ const LawyerDashboard: React.FC<{ onLogout: () => void, user: User }> = ({ onLog
         </div>
       )}
 
+      {/* Modal Detalhes com Abas */}
       {selectedProcessForDetails && (
          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#1e1b4b]/95 backdrop-blur-md animate-in fade-in duration-300">
             <div className="bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh]">
                <div className="p-10 md:p-14 overflow-y-auto">
-                  <header className="flex justify-between items-center mb-10">
-                     <div>
-                        <span className="px-4 py-1.5 bg-indigo-50 text-[#593EFF] text-[9px] font-black rounded-full uppercase tracking-widest border border-indigo-100 mb-4 inline-block">{selectedProcessForDetails.type}</span>
-                        <h2 className="text-3xl font-black text-[#1e1b4b] italic uppercase tracking-tighter leading-none">DETALHES DO <span className="text-[#593EFF]">PROCESSO</span></h2>
-                        <p className="text-slate-400 text-[9px] font-black uppercase tracking-widest mt-2">{selectedProcessForDetails.readable_id} • {selectedProcessForDetails.clientName}</p>
+                  <header className="flex flex-col gap-6 mb-8">
+                     <div className="flex justify-between items-center">
+                        <div>
+                            <span className="px-4 py-1.5 bg-indigo-50 text-[#593EFF] text-[9px] font-black rounded-full uppercase tracking-widest border border-indigo-100 mb-4 inline-block">{selectedProcessForDetails.type}</span>
+                            <h2 className="text-3xl font-black text-[#1e1b4b] italic uppercase tracking-tighter leading-none">DETALHES DO <span className="text-[#593EFF]">PROCESSO</span></h2>
+                            <p className="text-slate-400 text-[9px] font-black uppercase tracking-widest mt-2">{selectedProcessForDetails.readable_id} • {selectedProcessForDetails.clientName}</p>
+                        </div>
+                        <button onClick={() => setSelectedProcessForDetails(null)} className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-colors">
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
                      </div>
-                     <button onClick={() => setSelectedProcessForDetails(null)} className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-colors">
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                     </button>
+
+                     {/* Abas de Navegação */}
+                     <div className="flex p-1.5 bg-slate-100 rounded-2xl w-fit">
+                        <button 
+                            onClick={() => setDetailTab('info')}
+                            className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${detailTab === 'info' ? 'bg-white text-[#1e1b4b] shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
+                        >
+                            Informações
+                        </button>
+                        <button 
+                            onClick={() => setDetailTab('timeline')}
+                            className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${detailTab === 'timeline' ? 'bg-white text-[#1e1b4b] shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
+                        >
+                            Andamento
+                        </button>
+                     </div>
                   </header>
 
-                  <div className="space-y-8">
-                     <div className="grid grid-cols-2 gap-4">
-                        <div className="p-6 bg-slate-50 rounded-[1.8rem] border border-slate-100 text-center">
-                           <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Total de Pontos</span>
-                           <span className="text-2xl font-black text-[#1e1b4b]">{selectedProcessForDetails.totalPoints} pts</span>
-                        </div>
-                        <div className="p-6 bg-slate-50 rounded-[1.8rem] border border-slate-100 text-center">
-                           <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Qtd. Infrações</span>
-                           <span className="text-2xl font-black text-[#1e1b4b]">{selectedProcessForDetails.fines?.length || 0}</span>
-                        </div>
-                     </div>
+                  {detailTab === 'info' ? (
+                      <div className="space-y-8 animate-in slide-in-from-left-4 duration-300">
+                         <div className="grid grid-cols-2 gap-4">
+                            <div className="p-6 bg-slate-50 rounded-[1.8rem] border border-slate-100 text-center">
+                               <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Total de Pontos</span>
+                               <span className="text-2xl font-black text-[#1e1b4b]">{selectedProcessForDetails.totalPoints} pts</span>
+                            </div>
+                            <div className="p-6 bg-slate-50 rounded-[1.8rem] border border-slate-100 text-center">
+                               <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Qtd. Infrações</span>
+                               <span className="text-2xl font-black text-[#1e1b4b]">{selectedProcessForDetails.fines?.length || 0}</span>
+                            </div>
+                         </div>
 
-                     <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Relato do Condutor</label>
-                        <div className="p-6 bg-indigo-50/30 rounded-[1.8rem] border border-indigo-100">
-                           <p className="text-sm font-medium text-slate-600 italic leading-relaxed">
-                              "{selectedProcessForDetails.description || 'Nenhum relato adicional fornecido pelo condutor.'}"
-                           </p>
-                        </div>
-                     </div>
+                         <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Relato do Condutor</label>
+                            <div className="p-6 bg-indigo-50/30 rounded-[1.8rem] border border-indigo-100">
+                               <p className="text-sm font-medium text-slate-600 italic leading-relaxed">
+                                  "{selectedProcessForDetails.description || 'Nenhum relato adicional fornecido pelo condutor.'}"
+                               </p>
+                            </div>
+                         </div>
 
-                     <div className="space-y-3">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 flex items-center gap-2">
-                           Documentos Anexados
-                           <span className="bg-[#593EFF] text-white text-[8px] px-2 py-0.5 rounded-full">{selectedProcessForDetails.fines?.length || 0}</span>
-                        </label>
-                        
-                        <div className="space-y-3">
-                           {selectedProcessForDetails.fines && selectedProcessForDetails.fines.length > 0 ? (
-                              selectedProcessForDetails.fines.map((fine, idx) => (
-                                 <div key={idx} className="p-4 bg-white rounded-2xl border-2 border-slate-100 flex items-center justify-between group hover:border-indigo-200 transition-colors">
-                                    <div className="flex items-center gap-4">
-                                       <div className="w-10 h-10 bg-rose-100 text-rose-500 rounded-xl flex items-center justify-center font-black text-xs">PDF</div>
-                                       <div>
-                                          <span className="text-[9px] font-black text-[#1e1b4b] uppercase tracking-wide block">Infração {idx + 1} - {fine.points} pts</span>
-                                          <span className="text-[9px] font-bold text-slate-400 truncate max-w-[150px] block">{fine.documentName || 'documento.pdf'}</span>
-                                       </div>
-                                    </div>
-                                    <a 
-                                       href={fine.documentUrl || '#'} 
-                                       target="_blank"
-                                       rel="noopener noreferrer"
-                                       className="px-4 py-2 bg-[#1e1b4b] text-white text-[9px] font-black uppercase rounded-lg hover:bg-[#593EFF] transition-colors shadow-lg shadow-indigo-200/50"
-                                    >
-                                       Baixar
-                                    </a>
-                                 </div>
-                              ))
-                           ) : (
-                              <div className="p-6 text-center text-slate-400 text-xs italic bg-slate-50 rounded-2xl">
-                                 Nenhuma multa detalhada neste processo.
+                         <div className="space-y-3">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 flex items-center gap-2">
+                               Documentos Anexados
+                               <span className="bg-[#593EFF] text-white text-[8px] px-2 py-0.5 rounded-full">{selectedProcessForDetails.fines?.length || 0}</span>
+                            </label>
+                            
+                            <div className="space-y-3">
+                               {selectedProcessForDetails.fines && selectedProcessForDetails.fines.length > 0 ? (
+                                  selectedProcessForDetails.fines.map((fine, idx) => (
+                                     <div key={idx} className="p-4 bg-white rounded-2xl border-2 border-slate-100 flex items-center justify-between group hover:border-indigo-200 transition-colors">
+                                        <div className="flex items-center gap-4">
+                                           <div className="w-10 h-10 bg-rose-100 text-rose-500 rounded-xl flex items-center justify-center font-black text-xs">PDF</div>
+                                           <div>
+                                              <span className="text-[9px] font-black text-[#1e1b4b] uppercase tracking-wide block">Infração {idx + 1} - {fine.points} pts</span>
+                                              <span className="text-[9px] font-bold text-slate-400 truncate max-w-[150px] block">{fine.documentName || 'documento.pdf'}</span>
+                                           </div>
+                                        </div>
+                                        <a href="#" className="px-4 py-2 bg-[#1e1b4b] text-white text-[9px] font-black uppercase rounded-lg hover:bg-[#593EFF] transition-colors shadow-lg shadow-indigo-200/50">Baixar</a>
+                                     </div>
+                                  ))
+                               ) : (
+                                  <div className="p-6 text-center text-slate-400 text-xs italic bg-slate-50 rounded-2xl">
+                                     Nenhuma multa detalhada neste processo.
+                                  </div>
+                               )}
+                            </div>
+                         </div>
+                      </div>
+                  ) : (
+                      <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
+                          {isLoadingTimeline ? (
+                              <div className="text-center py-12 text-slate-400 font-bold uppercase tracking-widest animate-pulse">Carregando histórico...</div>
+                          ) : timelineData.length === 0 ? (
+                              <div className="text-center py-12 text-slate-400 font-bold uppercase tracking-widest">Nenhum evento registrado.</div>
+                          ) : (
+                              <div className="relative border-l-2 border-slate-100 ml-4 pl-8 space-y-10 py-2">
+                                  {timelineData.map((event) => (
+                                      <div key={event.id} className="relative">
+                                          {/* Marcador da Linha do Tempo */}
+                                          <div className={`absolute -left-[41px] top-0 w-6 h-6 rounded-full border-4 border-white shadow-md z-10 flex items-center justify-center ${
+                                              event.authorRole === 'LAWYER' ? 'bg-[#593EFF]' : 
+                                              event.authorRole === 'CLIENT' ? 'bg-slate-400' : 'bg-emerald-400'
+                                          }`}></div>
+                                          
+                                          <div className="flex flex-col">
+                                              <span className="text-[8px] font-black text-slate-300 uppercase tracking-widest mb-1">{formatDate(event.date)}</span>
+                                              <div className={`p-5 rounded-2xl border ${
+                                                  event.authorRole === 'LAWYER' ? 'bg-indigo-50 border-indigo-100' : 'bg-white border-slate-100'
+                                              }`}>
+                                                  <div className="flex items-center gap-2 mb-2">
+                                                      <span className={`text-[9px] font-black uppercase tracking-widest ${
+                                                          event.authorRole === 'LAWYER' ? 'text-[#593EFF]' : 'text-slate-500'
+                                                      }`}>{event.authorName}</span>
+                                                      {event.type === 'STATUS_CHANGE' && (
+                                                          <span className="px-2 py-0.5 bg-slate-200 text-slate-500 text-[8px] font-bold rounded-md uppercase">Status</span>
+                                                      )}
+                                                  </div>
+                                                  <h4 className="text-sm font-black text-[#1e1b4b] mb-1">{event.title}</h4>
+                                                  <p className="text-xs text-slate-600 font-medium leading-relaxed">{event.description}</p>
+                                                  
+                                                  {event.attachmentUrl && (
+                                                      <div className="mt-3 p-3 bg-white rounded-xl border border-slate-100 flex items-center gap-3">
+                                                          <div className="w-8 h-8 bg-rose-100 text-rose-500 rounded-lg flex items-center justify-center font-black text-[9px]">PDF</div>
+                                                          <span className="text-[9px] font-bold text-slate-500 uppercase">Anexo Disponível</span>
+                                                      </div>
+                                                  )}
+                                              </div>
+                                          </div>
+                                      </div>
+                                  ))}
                               </div>
-                           )}
-                        </div>
-                     </div>
+                          )}
+                      </div>
+                  )}
 
-                     <button onClick={() => setSelectedProcessForDetails(null)} className="w-full py-5 bg-slate-100 text-slate-400 font-black rounded-2xl uppercase text-[10px] tracking-widest hover:bg-slate-200 transition-colors mt-4">
-                        Fechar Detalhes
-                     </button>
-                  </div>
+                  <button onClick={() => setSelectedProcessForDetails(null)} className="w-full py-5 bg-slate-100 text-slate-400 font-black rounded-2xl uppercase text-[10px] tracking-widest hover:bg-slate-200 transition-colors mt-8">
+                     Fechar Detalhes
+                  </button>
                </div>
             </div>
          </div>
